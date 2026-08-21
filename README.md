@@ -2,6 +2,8 @@
 
 Write HTML and CSS, get a PDF. Rendered by Cloudflare Browser Run.
 
+Demo: https://htmlcsspdf.ben2.workers.dev/
+
 ## Running
 
 ```sh
