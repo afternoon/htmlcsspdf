@@ -7,29 +7,36 @@ Demo: https://htmlcsspdf.ben2.workers.dev/
 ## Running
 
 ```sh
-npm install
-npm run dev      # builds nothing — see note below
+bun install
+bun run dev
 ```
 
-`npm run dev` starts `wrangler dev`, which serves the Worker plus the built
-assets from `dist/`. Run `npm run build` first (and after frontend changes):
-
-```sh
-npm run build && npm run dev
-```
-
-Then open http://localhost:8788.
+Then open http://localhost:5173. The Cloudflare Vite plugin runs the server
+routes in the real Workers runtime, so the `BROWSER` binding works locally and
+both client and server code hot-reload — no build step in the loop.
 
 ## Deploying
 
 ```sh
-npm run deploy
+bun run deploy
 ```
 
 ## How it works
 
-- `worker/index.ts` — serves static assets and handles `POST /api/render`.
-  Takes `{html, css}`, renders with Puppeteer, returns PDF bytes.
+Built on TanStack Start. There is no hand-written Worker entry: `wrangler.jsonc`
+points `main` at `@tanstack/react-start/server-entry`, which serves the client
+assets and dispatches server routes.
+
+- `src/routes/api.render.ts` — handles `POST /api/render`. Takes `{html, css}`,
+  renders with Puppeteer via the `BROWSER` binding, returns PDF bytes. Reaches
+  the binding through the `cloudflare:workers` `env` import, so this module must
+  stay server-only.
+- `src/routes/__root.tsx` — the document shell. Opted out of SSR (`ssr: false`):
+  the editors build CodeMirror views against real DOM nodes and the document is
+  read from localStorage during render. Revisit if static pages are added.
+- `src/routes/index.tsx` — mounts the app at `/`.
+- `src/App.tsx` — three-pane UI, render lifecycle, localStorage persistence,
+  error overlay, download button.
 - `src/App.tsx` — three-pane UI, render lifecycle, localStorage persistence,
   error overlay, download button.
 - `src/Editor.tsx` — CodeMirror 6 wrapper.

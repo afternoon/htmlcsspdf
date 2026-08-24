@@ -1,10 +1,7 @@
+import { env } from "cloudflare:workers";
 import type { ActiveSession, Browser, BrowserWorker } from "@cloudflare/puppeteer";
 import puppeteer from "@cloudflare/puppeteer";
-
-interface Env {
-  BROWSER: BrowserWorker;
-  ASSETS: Fetcher;
-}
+import { createFileRoute } from "@tanstack/react-router";
 
 interface RenderBody {
   html?: unknown;
@@ -98,11 +95,7 @@ function classifyError(e: unknown): { status: number; message: string; hint?: st
   return { status: 500, message: `Render failed: ${raw}` };
 }
 
-async function handleRender(request: Request, env: Env): Promise<Response> {
-  if (request.method !== "POST") {
-    return errorResponse(405, "Method not allowed. Use POST.");
-  }
-
+async function handleRender(request: Request): Promise<Response> {
   let body: RenderBody;
   try {
     body = (await request.json()) as RenderBody;
@@ -124,7 +117,7 @@ async function handleRender(request: Request, env: Env): Promise<Response> {
     return errorResponse(
       503,
       "No Browser Run binding available.",
-      "Run via `npm run dev` (wrangler), not the bare Vite dev server.",
+      "Run via `bun run dev`, which starts Vite with the Cloudflare plugin.",
     );
   }
 
@@ -162,12 +155,13 @@ async function handleRender(request: Request, env: Env): Promise<Response> {
   }
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/api/render") {
-      return handleRender(request, env);
-    }
-    return env.ASSETS.fetch(request);
+export const Route = createFileRoute("/api/render")({
+  server: {
+    handlers: {
+      POST: ({ request }) => handleRender(request),
+      // Without this, a GET falls through to the router and renders the app
+      // shell as HTML. Callers expecting JSON should get JSON.
+      GET: () => errorResponse(405, "Method not allowed. Use POST."),
+    },
   },
-} satisfies ExportedHandler<Env>;
+});

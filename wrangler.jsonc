@@ -1,16 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "htmlcsspdf",
-  "main": "worker/index.ts",
+  "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
   "browser": {
     "binding": "BROWSER"
-  },
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "single-page-application",
-    "binding": "ASSETS"
   },
   "observability": {
     "enabled": true
