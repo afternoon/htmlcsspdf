@@ -5,7 +5,12 @@
       "src/**",
       "*.ts",
       "*.json",
-      "!src/routeTree.gen.ts"
+      "!src/routeTree.gen.ts",
+      "!worker-configuration.d.ts",
+      "!.claude",
+      "!.next",
+      "!playwright-report",
+      "!test-results"
     ]
   },
   "formatter": {
@@ -15,9 +20,7 @@
     "lineWidth": 90
   },
   "linter": {
-    "enabled": true,
     "rules": {
-      "recommended": true,
       "correctness": {
         "useExhaustiveDependencies": "warn"
       }
