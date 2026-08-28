@@ -7,6 +7,14 @@
   "browser": {
     "binding": "BROWSER"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "htmlcsspdf",
+      "database_id": "0f9ff16f-c44e-4ca1-852c-bd55eabb1fb0",
+      "migrations_dir": "migrations"
+    }
+  ],
   "observability": {
     "enabled": true
   }

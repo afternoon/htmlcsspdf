@@ -1,0 +1,16 @@
+# Copy to `.dev.vars` and fill in. `.dev.vars` is gitignored.
+#
+# BETTER_AUTH_SECRET: any long random string. Generate one with:
+#   openssl rand -base64 32
+BETTER_AUTH_SECRET=""
+
+# The origin the app is served from. Must match the origin Google redirects
+# back to, or sign-in fails with a redirect_uri mismatch.
+BETTER_AUTH_URL="http://localhost:5173"
+
+# From the Google Cloud Console OAuth 2.0 Client (type: Web application).
+# Authorised redirect URIs must include BOTH:
+#   http://localhost:5173/api/auth/callback/google
+#   https://htmlcsspdf.ben2.workers.dev/api/auth/callback/google
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
