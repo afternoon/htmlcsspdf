@@ -1,66 +1,14 @@
 import { env } from "cloudflare:workers";
-import type { ActiveSession, Browser, BrowserWorker } from "@cloudflare/puppeteer";
-import puppeteer from "@cloudflare/puppeteer";
+import type { Browser } from "@cloudflare/puppeteer";
 import { createFileRoute } from "@tanstack/react-router";
+import { acquireBrowser, withRenderedPage } from "../server/render.ts";
 
 interface RenderBody {
   html?: unknown;
   css?: unknown;
 }
 
-/** Keep the browser warm between renders so a 1s debounce doesn't hit the
- *  free plan's "1 new instance per 20s" limit. Max allowed is 10 minutes. */
-const KEEP_ALIVE_MS = 600_000;
 const MAX_INPUT_BYTES = 2_000_000;
-const NAV_TIMEOUT_MS = 20_000;
-
-/** Pick an existing session nobody is connected to. */
-async function getFreeSession(endpoint: BrowserWorker): Promise<string | undefined> {
-  try {
-    const sessions: ActiveSession[] = await puppeteer.sessions(endpoint);
-    const free = sessions.filter((s) => !s.connectionId).map((s) => s.sessionId);
-    if (free.length === 0) return undefined;
-    return free[Math.floor(Math.random() * free.length)];
-  } catch (e) {
-    console.log(`sessions() failed: ${e}`);
-    return undefined;
-  }
-}
-
-async function acquireBrowser(endpoint: BrowserWorker): Promise<Browser> {
-  const sessionId = await getFreeSession(endpoint);
-  if (sessionId) {
-    try {
-      return await puppeteer.connect(endpoint, sessionId);
-    } catch (e) {
-      // Session died between listing and connecting; fall through to launch.
-      console.log(`connect(${sessionId}) failed: ${e}`);
-    }
-  }
-  return await puppeteer.launch(endpoint, { keep_alive: KEEP_ALIVE_MS });
-}
-
-function buildDocument(html: string, css: string): string {
-  // The user's HTML may or may not be a full document. If it already has a
-  // <head>, inject the stylesheet there; otherwise wrap it in a minimal shell.
-  const style = `<style>\n${css}\n</style>`;
-  if (/<head[\s>]/i.test(html)) {
-    return html.replace(/(<head[^>]*>)/i, `$1\n${style}\n`);
-  }
-  if (/<html[\s>]/i.test(html)) {
-    return html.replace(/(<html[^>]*>)/i, `$1\n<head>\n${style}\n</head>\n`);
-  }
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-${style}
-</head>
-<body>
-${html}
-</body>
-</html>`;
-}
 
 function errorResponse(status: number, message: string, hint?: string): Response {
   return Response.json({ error: message, hint }, { status });
@@ -95,6 +43,11 @@ function classifyError(e: unknown): { status: number; message: string; hint?: st
   return { status: 500, message: `Render failed: ${raw}` };
 }
 
+/**
+ * Renders to PDF. Deliberately open to unauthenticated callers: previewing
+ * before signing in is the point, and the Browser Run quota is a hard ceiling
+ * rather than a runaway cost.
+ */
 async function handleRender(request: Request): Promise<Response> {
   let body: RenderBody;
   try {
@@ -124,27 +77,19 @@ async function handleRender(request: Request): Promise<Response> {
   let browser: Browser | undefined;
   try {
     browser = await acquireBrowser(env.BROWSER);
-    const page = await browser.newPage();
-    try {
-      await page.setContent(buildDocument(html, css), {
-        waitUntil: "networkidle0",
-        timeout: NAV_TIMEOUT_MS,
-      });
-      const pdf = await page.pdf({
+    const pdf = await withRenderedPage(browser, html, css, (page) =>
+      page.pdf({
         printBackground: true,
         // Page size and margins come entirely from the user's @page CSS.
         preferCSSPageSize: true,
-      });
-      return new Response(pdf as BodyInit, {
-        headers: {
-          "content-type": "application/pdf",
-          "cache-control": "no-store",
-        },
-      });
-    } finally {
-      // Close the page but leave the browser warm for the next render.
-      await page.close().catch(() => {});
-    }
+      }),
+    );
+    return new Response(pdf as BodyInit, {
+      headers: {
+        "content-type": "application/pdf",
+        "cache-control": "no-store",
+      },
+    });
   } catch (e) {
     const { status, message, hint } = classifyError(e);
     console.log(`render error: ${e}`);
