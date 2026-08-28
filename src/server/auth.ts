@@ -1,3 +1,4 @@
+import { waitUntil } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 
@@ -5,11 +6,9 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
  * Better Auth, built per request.
  *
  * Not a module-level singleton: Workers forbid I/O at global scope, so the D1
- * binding is only reachable once a request is in flight. A singleton would also
- * capture the first request's `waitUntil` and hand it to every later request,
- * attaching background work to a context that has already ended.
+ * binding is only reachable once a request is in flight.
  */
-export function createAuth(env: Env, ctx?: ExecutionContext) {
+export function createAuth(env: Env) {
   return betterAuth({
     // Passed straight through: Better Auth duck-types a D1Database and selects
     // its own D1 dialect, so no ORM or adapter sits in between.
@@ -25,10 +24,14 @@ export function createAuth(env: Env, ctx?: ExecutionContext) {
       },
     },
     advanced: {
-      // Better Auth defers non-critical work (cleanup, timing-attack
-      // mitigation) until after the response is sent. Without a handler the
-      // isolate can be torn down before that work runs.
-      ...(ctx ? { backgroundTasks: { handler: (p) => ctx.waitUntil(p) } } : {}),
+      // Better Auth defers non-critical work — cleanup, timing-attack
+      // mitigation — until after the response is sent, and a Worker isolate can
+      // be torn down the moment it responds. `waitUntil` from
+      // `cloudflare:workers` is module-scoped and resolves the in-flight
+      // request's context, so it needs no ExecutionContext threaded through:
+      // an earlier version took one as an argument, no caller ever passed it,
+      // and the handler was silently never installed.
+      backgroundTasks: { handler: waitUntil },
     },
     // Must be last: the plugin warns at runtime if another plugin follows it.
     plugins: [tanstackStartCookies()],
