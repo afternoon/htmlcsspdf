@@ -8,6 +8,9 @@ import { MAX_NAME_LENGTH } from "./server/documents.ts";
  * requests with them and the client parses responses with them, so the two
  * cannot drift. Responses are parsed rather than cast — our own API can be an
  * older deploy, which makes it an untrusted source like any other.
+ *
+ * These functions run in the browser only. Server rendering reads D1 directly
+ * (see server/loaderData.ts) rather than calling this API over HTTP.
  */
 
 export const DocumentNameSchema = z
@@ -59,49 +62,13 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Where relative API paths resolve against, and what cookies to send.
- *
- * In the browser both are ambient: a relative path resolves against the page,
- * and the cookie jar travels automatically. On the server neither holds, so a
- * loader must supply them — see `serverContext` in the route loaders, which is
- * the only place that can reach the in-flight request without dragging
- * server-only imports into the client bundle.
- */
-export interface RequestContext {
-  origin: string;
-  cookie: string | null;
-}
-
-let serverContext: RequestContext | null = null;
-
-/**
- * Set the context for server-side calls, for the duration of one loader.
- *
- * Module-level state is safe here only because a Worker isolate handles one
- * request at a time between awaits, and every loader sets this immediately
- * before its own fetch.
- */
-export function setRequestContext(context: RequestContext | null): void {
-  serverContext = context;
-}
-
 function resolveRequest(
   path: string,
   init?: RequestInit,
 ): { url: string; init: RequestInit } {
-  const headers: HeadersInit = { "content-type": "application/json", ...init?.headers };
-
-  if (!serverContext) return { url: path, init: { ...init, headers } };
-
   return {
-    url: new URL(path, serverContext.origin).toString(),
-    init: {
-      ...init,
-      headers: serverContext.cookie
-        ? { ...headers, cookie: serverContext.cookie }
-        : headers,
-    },
+    url: path,
+    init: { ...init, headers: { "content-type": "application/json", ...init?.headers } },
   };
 }
 

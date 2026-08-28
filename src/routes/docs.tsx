@@ -1,17 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { DocumentsPage } from "../DocumentsPage.tsx";
-import { ApiError, fetchDocuments } from "../documentsApi.ts";
+import type { DocumentSummary } from "../documentsApi.ts";
 import { SignedOut } from "../SignedOut.tsx";
 
 /**
- * On the server the API client has no origin or cookie jar of its own, so the
- * loader hands it the in-flight request. A no-op in the browser, where both
- * are ambient.
+ * Read from D1 directly rather than over HTTP.
+ *
+ * The loader runs in the same isolate as the API routes, so fetching
+ * `/api/documents` would be a network round trip to reach code next door — and
+ * a Worker's request to its own hostname does not reliably come back to
+ * itself.
  */
-const adoptRequest = createServerOnlyFn(async () => {
-  const { adoptIncomingRequest } = await import("../server/loaderContext.ts");
-  adoptIncomingRequest();
+const loadDocuments = createServerOnlyFn(async (): Promise<DocumentSummary[] | null> => {
+  const { loadDocumentsForRequest } = await import("../server/loaderData.ts");
+  return await loadDocumentsForRequest();
 });
 
 /**
@@ -22,18 +25,9 @@ const adoptRequest = createServerOnlyFn(async () => {
  * enough, and TanStack Query would be a dependency earning very little here.
  */
 export const Route = createFileRoute("/docs")({
-  loader: async () => {
-    await adoptRequest();
-    try {
-      return await fetchDocuments();
-    } catch (error) {
-      // Being signed out is an ordinary state, not a server fault: answer 200
-      // with an invitation to sign in rather than a 500 the visitor cannot act
-      // on. Anything else is a real error and belongs in the boundary.
-      if (error instanceof ApiError && error.status === 401) return null;
-      throw error;
-    }
-  },
+  // null means signed out, which is an ordinary state rather than a failure —
+  // so it renders an invitation to sign in with a normal status, not a 500.
+  loader: async () => (await loadDocuments()) ?? null,
   component: DocumentsRoute,
   errorComponent: DocumentsError,
 });
@@ -48,11 +42,6 @@ function DocumentsRoute() {
 }
 
 function DocumentsError({ error }: { error: Error }) {
-  // Being signed out is the ordinary case here, not a failure: someone
-  // following a link to /docs without a session should be invited in rather
-  // than shown an error they cannot act on.
-  if (error instanceof ApiError && error.status === 401) return <SignedOut />;
-
   return (
     <div className="page">
       <div className="empty">

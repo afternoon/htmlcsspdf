@@ -1,17 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { App } from "../App.tsx";
-import { fetchDocument } from "../documentsApi.ts";
+import type { DocumentDetail } from "../documentsApi.ts";
+import { SignedOut } from "../SignedOut.tsx";
 
-/**
- * On the server the API client has no origin or cookie jar of its own, so the
- * loader hands it the in-flight request. A no-op in the browser, where both
- * are ambient.
- */
-const adoptRequest = createServerOnlyFn(async () => {
-  const { adoptIncomingRequest } = await import("../server/loaderContext.ts");
-  adoptIncomingRequest();
-});
+/** Read from D1 directly; see the note in routes/docs.tsx. */
+const loadDocument = createServerOnlyFn(
+  async (id: string): Promise<DocumentDetail | null | undefined> => {
+    const { loadDocumentForRequest } = await import("../server/loaderData.ts");
+    return (await loadDocumentForRequest(id)) as DocumentDetail | null | undefined;
+  },
+);
 
 /**
  * An existing document, opened in the editor.
@@ -21,21 +20,41 @@ const adoptRequest = createServerOnlyFn(async () => {
  */
 export const Route = createFileRoute("/d/$id")({
   loader: async ({ params }) => {
-    await adoptRequest();
-    return await fetchDocument(params.id);
+    const document = await loadDocument(params.id);
+    // undefined means the document does not exist, or belongs to someone else;
+    // the two are deliberately indistinguishable.
+    if (document === undefined) throw notFound();
+    return document;
   },
   component: DocumentEditor,
+  notFoundComponent: DocumentNotFound,
   errorComponent: DocumentError,
 });
 
 function DocumentEditor() {
   const document = Route.useLoaderData();
+  if (!document) return <SignedOut />;
+
   return (
     <App
       documentId={document.id}
       documentName={document.name}
       initialContent={{ html: document.html, css: document.css }}
     />
+  );
+}
+
+function DocumentNotFound() {
+  return (
+    <div className="page">
+      <div className="empty">
+        <h1>Document not found</h1>
+        <p>It may have been deleted, or it belongs to another account.</p>
+        <a href="/docs" className="button-link">
+          Back to documents
+        </a>
+      </div>
+    </div>
   );
 }
 
