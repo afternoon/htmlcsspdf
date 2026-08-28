@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:lurk": "vite dev --port 1337",
     "build": "vite build",
     "deploy": "bun run build && wrangler deploy",
     "test": "vitest run",

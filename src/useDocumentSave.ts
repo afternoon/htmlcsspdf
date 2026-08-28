@@ -39,7 +39,15 @@ export function useDocumentSave(
   const [documentId, setDocumentId] = useState(initialDocumentId);
   const [signInOpen, setSignInOpen] = useState(false);
   // Opens by itself if the user pressed Save before being sent to sign in.
-  const [nameOpen, setNameOpen] = useState(() => takePendingSave());
+  //
+  // Only for a document that has no name yet: the flag is read once, but a
+  // stale one — from a sign-in abandoned earlier — must not pop a naming
+  // dialog over a stored document that is already named. Clear it either way,
+  // so it cannot fire later against some unrelated page.
+  const [nameOpen, setNameOpen] = useState(() => {
+    const pending = takePendingSave();
+    return pending && !initialDocumentId;
+  });
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
 

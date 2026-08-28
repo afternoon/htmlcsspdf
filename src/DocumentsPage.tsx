@@ -5,11 +5,9 @@ import { DocumentCard } from "./DocumentCard.tsx";
 import type { DocumentSummary } from "./documentsApi.ts";
 import * as api from "./documentsApi.ts";
 import { NameDialog } from "./NameDialog.tsx";
-import { Route } from "./routes/docs.tsx";
 
 /** The document list: header, a New document action, and a grid of cards. */
-export function DocumentsPage() {
-  const documents = Route.useLoaderData();
+export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   const router = useRouter();
   const [renaming, setRenaming] = useState<DocumentSummary | null>(null);
   const [error, setError] = useState<string | null>(null);

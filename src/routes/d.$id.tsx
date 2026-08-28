@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createServerOnlyFn } from "@tanstack/react-start";
 import { App } from "../App.tsx";
 import { fetchDocument } from "../documentsApi.ts";
+
+/**
+ * On the server the API client has no origin or cookie jar of its own, so the
+ * loader hands it the in-flight request. A no-op in the browser, where both
+ * are ambient.
+ */
+const adoptRequest = createServerOnlyFn(async () => {
+  const { adoptIncomingRequest } = await import("../server/loaderContext.ts");
+  adoptIncomingRequest();
+});
 
 /**
  * An existing document, opened in the editor.
@@ -9,7 +20,10 @@ import { fetchDocument } from "../documentsApi.ts";
  * sample — so Save updates in place instead of asking for a name again.
  */
 export const Route = createFileRoute("/d/$id")({
-  loader: ({ params }) => fetchDocument(params.id),
+  loader: async ({ params }) => {
+    await adoptRequest();
+    return await fetchDocument(params.id);
+  },
   component: DocumentEditor,
   errorComponent: DocumentError,
 });

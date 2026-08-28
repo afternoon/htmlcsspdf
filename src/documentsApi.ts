@@ -59,11 +59,55 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Where relative API paths resolve against, and what cookies to send.
+ *
+ * In the browser both are ambient: a relative path resolves against the page,
+ * and the cookie jar travels automatically. On the server neither holds, so a
+ * loader must supply them — see `serverContext` in the route loaders, which is
+ * the only place that can reach the in-flight request without dragging
+ * server-only imports into the client bundle.
+ */
+export interface RequestContext {
+  origin: string;
+  cookie: string | null;
+}
+
+let serverContext: RequestContext | null = null;
+
+/**
+ * Set the context for server-side calls, for the duration of one loader.
+ *
+ * Module-level state is safe here only because a Worker isolate handles one
+ * request at a time between awaits, and every loader sets this immediately
+ * before its own fetch.
+ */
+export function setRequestContext(context: RequestContext | null): void {
+  serverContext = context;
+}
+
+function resolveRequest(
+  path: string,
+  init?: RequestInit,
+): { url: string; init: RequestInit } {
+  const headers: HeadersInit = { "content-type": "application/json", ...init?.headers };
+
+  if (!serverContext) return { url: path, init: { ...init, headers } };
+
+  return {
+    url: new URL(path, serverContext.origin).toString(),
+    init: {
+      ...init,
+      headers: serverContext.cookie
+        ? { ...headers, cookie: serverContext.cookie }
+        : headers,
+    },
+  };
+}
+
 async function request(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(path, {
-    ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
-  });
+  const resolved = resolveRequest(path, init);
+  const response = await fetch(resolved.url, resolved.init);
 
   if (!response.ok) {
     const message = await response

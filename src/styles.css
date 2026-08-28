@@ -467,6 +467,9 @@
   .doc-preview {
     display: block;
     aspect-ratio: var(--page-ratio);
+    /* The whole preview is a link, so suppress the underline it would
+       otherwise give the placeholder text. */
+    text-decoration: none;
     /* White: a document page is white regardless of the app's dark chrome. */
     background: #fff;
     overflow: hidden;
@@ -483,6 +486,8 @@
     display: grid;
     place-items: center;
     block-size: 100%;
+    /* Fixed, not tokenised: this sits on the white page preview, so it does
+       not follow the app's dark chrome. */
     color: #9aa0ac;
     font-size: var(--text-xs);
   }
@@ -516,7 +521,10 @@
     padding: 0 var(--space-3) var(--space-3);
   }
 
+  /* Both tokens, not just the text: the base rule paints an accent
+     background, so overriding the foreground alone leaves blue on blue. */
   button[data-variant="danger"] {
+    --btn-bg: transparent;
     --btn-fg: var(--danger);
   }
 
