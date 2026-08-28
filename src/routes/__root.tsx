@@ -1,14 +1,18 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { createServerOnlyFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import type { SessionUser } from "../server/session.ts";
 import styles from "../styles.css?url";
 
 /**
  * Resolve the session on the server so the header renders signed-in on first
- * paint. Returns null in the browser, where the client session store — which
- * stays authoritative after hydration — already has the answer.
+ * paint, rather than flashing a signed-out state.
+ *
+ * A server function, not a server-*only* one: the root loader also runs on
+ * every client-side navigation, and `createServerOnlyFn` throws in the browser.
+ * After hydration the client session store is authoritative anyway, so this
+ * only matters for the first render.
  */
-const loadSession = createServerOnlyFn(async (): Promise<SessionUser | null> => {
+const loadSession = createServerFn().handler(async (): Promise<SessionUser | null> => {
   const { loadSessionUser } = await import("../server/sessionLoader.ts");
   return await loadSessionUser();
 });

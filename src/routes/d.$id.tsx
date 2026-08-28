@@ -1,16 +1,16 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { createServerOnlyFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { App } from "../App.tsx";
 import type { DocumentDetail } from "../documentsApi.ts";
 import { SignedOut } from "../SignedOut.tsx";
 
 /** Read from D1 directly; see the note in routes/docs.tsx. */
-const loadDocument = createServerOnlyFn(
-  async (id: string): Promise<DocumentDetail | null | undefined> => {
+const loadDocument = createServerFn()
+  .inputValidator((id: string) => id)
+  .handler(async ({ data: id }): Promise<DocumentDetail | null | undefined> => {
     const { loadDocumentForRequest } = await import("../server/loaderData.ts");
     return (await loadDocumentForRequest(id)) as DocumentDetail | null | undefined;
-  },
-);
+  });
 
 /**
  * An existing document, opened in the editor.
@@ -20,7 +20,7 @@ const loadDocument = createServerOnlyFn(
  */
 export const Route = createFileRoute("/d/$id")({
   loader: async ({ params }) => {
-    const document = await loadDocument(params.id);
+    const document = await loadDocument({ data: params.id });
     // undefined means the document does not exist, or belongs to someone else;
     // the two are deliberately indistinguishable.
     if (document === undefined) throw notFound();

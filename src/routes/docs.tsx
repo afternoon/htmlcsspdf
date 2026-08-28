@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerOnlyFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { DocumentsPage } from "../DocumentsPage.tsx";
 import type { DocumentSummary } from "../documentsApi.ts";
 import { SignedOut } from "../SignedOut.tsx";
@@ -7,15 +7,22 @@ import { SignedOut } from "../SignedOut.tsx";
 /**
  * Read from D1 directly rather than over HTTP.
  *
- * The loader runs in the same isolate as the API routes, so fetching
- * `/api/documents` would be a network round trip to reach code next door — and
- * a Worker's request to its own hostname does not reliably come back to
+ * A server function, not a server-*only* one: loaders run on the server for a
+ * fresh page load and in the browser for a client-side navigation, and
+ * `createServerOnlyFn` throws in the browser. `createServerFn` runs the body on
+ * the server either way, becoming an RPC call when a navigation triggers it.
+ *
+ * Reading D1 here rather than fetching `/api/documents` keeps server rendering
+ * out of the network: the loader runs in the same isolate as the API routes,
+ * and a Worker's request to its own hostname does not reliably come back to
  * itself.
  */
-const loadDocuments = createServerOnlyFn(async (): Promise<DocumentSummary[] | null> => {
-  const { loadDocumentsForRequest } = await import("../server/loaderData.ts");
-  return await loadDocumentsForRequest();
-});
+const loadDocuments = createServerFn().handler(
+  async (): Promise<DocumentSummary[] | null> => {
+    const { loadDocumentsForRequest } = await import("../server/loaderData.ts");
+    return await loadDocumentsForRequest();
+  },
+);
 
 /**
  * The document list.
