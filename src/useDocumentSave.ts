@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "./authClient.ts";
 import * as api from "./documentsApi.ts";
 import { clearDraft, markPendingSave, takePendingSave } from "./draft.ts";
@@ -38,18 +38,29 @@ export function useDocumentSave(
 
   const [documentId, setDocumentId] = useState(initialDocumentId);
   const [signInOpen, setSignInOpen] = useState(false);
-  // Opens by itself if the user pressed Save before being sent to sign in.
-  //
-  // Only for a document that has no name yet: the flag is read once, but a
-  // stale one — from a sign-in abandoned earlier — must not pop a naming
-  // dialog over a stored document that is already named. Clear it either way,
-  // so it cannot fire later against some unrelated page.
-  const [nameOpen, setNameOpen] = useState(() => {
-    const pending = takePendingSave();
-    return pending && !initialDocumentId;
-  });
+  const [nameOpen, setNameOpen] = useState(false);
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Resume a save the user started before being sent to sign in.
+   *
+   * Deferred until the session resolves, rather than read during the first
+   * render: the flag only means "finish the save", and finishing it requires
+   * knowing sign-in actually succeeded. Reading it too early opened the naming
+   * dialog for people who were still signed out — and, before the flag gained
+   * an expiry, for people who had abandoned a sign-in days earlier.
+   *
+   * Runs once either way, since `takePendingSave` clears as it reads.
+   */
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || isPending) return;
+    resumed.current = true;
+
+    // A document that already has a name needs no naming dialog.
+    if (takePendingSave() && session && !initialDocumentId) setNameOpen(true);
+  }, [isPending, session, initialDocumentId]);
 
   function requestSave(doc: Doc) {
     // The session is still resolving; a click now would misread it as signed

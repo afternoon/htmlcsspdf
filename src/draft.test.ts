@@ -68,4 +68,26 @@ describe("pending save across the sign-in redirect", () => {
     expect(takePendingSave()).toBe(true);
     expect(takePendingSave()).toBe(false);
   });
+
+  it("expires, so an abandoned sign-in does not resurface days later", () => {
+    const now = Date.now();
+    markPendingSave();
+
+    expect(takePendingSave(now + 60 * 60 * 1000)).toBe(false);
+  });
+
+  it("still reports a save from a few minutes ago", () => {
+    // Signing in can take a while — creating an account, choosing between
+    // several — so the window has to be generous enough to survive that.
+    const now = Date.now();
+    markPendingSave();
+
+    expect(takePendingSave(now + 5 * 60 * 1000)).toBe(true);
+  });
+
+  it("ignores a value that is not a timestamp", () => {
+    localStorage.setItem("htmlcsspdf.pendingSave.v1", "yes");
+
+    expect(takePendingSave()).toBe(false);
+  });
 });

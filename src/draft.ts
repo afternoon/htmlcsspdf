@@ -50,28 +50,43 @@ export function clearDraft(): void {
 }
 
 /**
+ * How long a pending save stays meaningful.
+ *
+ * Long enough to sign in — including creating a Google account or picking
+ * between several — and short enough that an abandoned attempt does not
+ * resurface. Without a bound the flag survives indefinitely: abandon a sign-in
+ * once, and the next visit days later opens a naming dialog nobody asked for.
+ */
+const PENDING_SAVE_TTL_MS = 10 * 60 * 1000;
+
+/**
  * Remember that the user pressed Save before being sent to sign in, so the
  * name dialog can open by itself when they come back.
  */
 export function markPendingSave(): void {
   try {
-    localStorage.setItem(PENDING_SAVE_KEY, "1");
+    localStorage.setItem(PENDING_SAVE_KEY, String(Date.now()));
   } catch {
     // Without this the user simply presses Save again.
   }
 }
 
 /**
- * Whether a save was pending, clearing the flag as it reads.
+ * Whether a save was pending recently, clearing the flag as it reads.
  *
- * Read-once on purpose: leaving it set would reopen the name dialog on every
- * later visit, long after the save it referred to.
+ * Read-once *and* time-bounded: reading once stops it reopening the dialog on
+ * every later visit, and the expiry stops a sign-in the user walked away from
+ * acting on a visit that has nothing to do with it.
  */
-export function takePendingSave(): boolean {
+export function takePendingSave(now: number = Date.now()): boolean {
   try {
-    const pending = localStorage.getItem(PENDING_SAVE_KEY) === "1";
+    const raw = localStorage.getItem(PENDING_SAVE_KEY);
     localStorage.removeItem(PENDING_SAVE_KEY);
-    return pending;
+    if (raw === null) return false;
+
+    const markedAt = Number(raw);
+    if (!Number.isFinite(markedAt)) return false;
+    return now - markedAt < PENDING_SAVE_TTL_MS;
   } catch {
     return false;
   }
