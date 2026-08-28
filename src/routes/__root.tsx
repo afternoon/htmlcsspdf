@@ -2,12 +2,14 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import styles from "../styles.css?url";
 
 /**
- * The shell is the only thing rendered on the server. Everything below it is
- * client-only: the editors build CodeMirror views against real DOM nodes, and
- * the document/layout state is read from localStorage during render.
+ * SSR is on, so /docs and the header resolve the session before HTML is sent
+ * rather than flashing a signed-out state.
+ *
+ * The editor is safe to render on the server: CodeMirror mounts in an effect,
+ * and content comes from route data with localStorage read lazily behind a
+ * `useState` initialiser that only runs in the browser.
  */
 export const Route = createRootRoute({
-  ssr: false,
   head: () => ({
     meta: [
       { charSet: "utf-8" },

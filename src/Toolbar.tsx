@@ -1,3 +1,6 @@
+import { AccountMenu } from "./AccountMenu.tsx";
+import type { SaveState } from "./useDocumentSave.ts";
+
 interface ToolbarProps {
   autoPreview: boolean;
   onAutoPreviewChange: (enabled: boolean) => void;
@@ -5,10 +8,22 @@ interface ToolbarProps {
   onFormat: () => void;
   onPreview: () => void;
   onDownload: () => void;
+  onSave: () => void;
+  onSignIn: () => void;
   formatting: boolean;
   rendering: boolean;
   canDownload: boolean;
+  saveState: SaveState;
+  /** Shown once the document has a name. */
+  documentName?: string;
 }
+
+const SAVE_LABEL: Record<SaveState, string> = {
+  idle: "Save",
+  saving: "Saving…",
+  saved: "Saved",
+  error: "Retry save",
+};
 
 /** The application header: status and the document actions. Renders only. */
 export function Toolbar({
@@ -18,17 +33,25 @@ export function Toolbar({
   onFormat,
   onPreview,
   onDownload,
+  onSave,
+  onSignIn,
   formatting,
   rendering,
   canDownload,
+  saveState,
+  documentName,
 }: ToolbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
         htmlcsspdf
-        <span className="status" data-busy={rendering || undefined}>
-          {rendering ? "rendering…" : "idle"}
-        </span>
+        {documentName ? (
+          <span className="doc-name">{documentName}</span>
+        ) : (
+          <span className="status" data-busy={rendering || undefined}>
+            {rendering ? "rendering…" : "idle"}
+          </span>
+        )}
       </div>
       <div className="actions">
         <label className="toggle">
@@ -61,6 +84,15 @@ export function Toolbar({
         >
           Download PDF
         </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saveState === "saving"}
+          data-state={saveState}
+        >
+          {SAVE_LABEL[saveState]}
+        </button>
+        <AccountMenu onSignIn={onSignIn} />
       </div>
     </header>
   );

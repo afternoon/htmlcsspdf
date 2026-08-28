@@ -10,11 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DocsRouteImport } from './routes/docs'
+import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
 import { Route as ApiRenderRouteImport } from './routes/api.render'
+import { Route as DIdRouteImport } from './routes/d.$id'
+import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
+import { Route as ApiDocumentsIdRouteImport } from './routes/api.documents.$id'
+import { Route as ApiDocumentsIdNameRouteImport } from './routes/api.documents.$id.name'
+import { Route as ApiDocumentsIdThumbnailRouteImport } from './routes/api.documents.$id.thumbnail'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
+  id: '/api/documents',
+  path: '/api/documents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRenderRoute = ApiRenderRouteImport.update({
@@ -22,31 +39,109 @@ const ApiRenderRoute = ApiRenderRouteImport.update({
   path: '/api/render',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DIdRoute = DIdRouteImport.update({
+  id: '/d/$id',
+  path: '/d/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocumentsIdRoute = ApiDocumentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiDocumentsRoute,
+} as any)
+const ApiDocumentsIdNameRoute = ApiDocumentsIdNameRouteImport.update({
+  id: '/name',
+  path: '/name',
+  getParentRoute: () => ApiDocumentsIdRoute,
+} as any)
+const ApiDocumentsIdThumbnailRoute = ApiDocumentsIdThumbnailRouteImport.update({
+  id: '/thumbnail',
+  path: '/thumbnail',
+  getParentRoute: () => ApiDocumentsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/render': typeof ApiRenderRoute
+  '/d/$id': typeof DIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
+  '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/render': typeof ApiRenderRoute
+  '/d/$id': typeof DIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
+  '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
+  '/api/documents': typeof ApiDocumentsRouteWithChildren
   '/api/render': typeof ApiRenderRoute
+  '/d/$id': typeof DIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
+  '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/render'
+  fullPaths:
+    | '/'
+    | '/docs'
+    | '/api/documents'
+    | '/api/render'
+    | '/d/$id'
+    | '/api/auth/$'
+    | '/api/documents/$id'
+    | '/api/documents/$id/name'
+    | '/api/documents/$id/thumbnail'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/render'
-  id: '__root__' | '/' | '/api/render'
+  to:
+    | '/'
+    | '/docs'
+    | '/api/documents'
+    | '/api/render'
+    | '/d/$id'
+    | '/api/auth/$'
+    | '/api/documents/$id'
+    | '/api/documents/$id/name'
+    | '/api/documents/$id/thumbnail'
+  id:
+    | '__root__'
+    | '/'
+    | '/docs'
+    | '/api/documents'
+    | '/api/render'
+    | '/d/$id'
+    | '/api/auth/$'
+    | '/api/documents/$id'
+    | '/api/documents/$id/name'
+    | '/api/documents/$id/thumbnail'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DocsRoute: typeof DocsRoute
+  ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
   ApiRenderRoute: typeof ApiRenderRoute
+  DIdRoute: typeof DIdRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +153,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents': {
+      id: '/api/documents'
+      path: '/api/documents'
+      fullPath: '/api/documents'
+      preLoaderRoute: typeof ApiDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/render': {
       id: '/api/render'
       path: '/api/render'
@@ -65,12 +174,77 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRenderRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/d/$id': {
+      id: '/d/$id'
+      path: '/d/$id'
+      fullPath: '/d/$id'
+      preLoaderRoute: typeof DIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/documents/$id': {
+      id: '/api/documents/$id'
+      path: '/$id'
+      fullPath: '/api/documents/$id'
+      preLoaderRoute: typeof ApiDocumentsIdRouteImport
+      parentRoute: typeof ApiDocumentsRoute
+    }
+    '/api/documents/$id/name': {
+      id: '/api/documents/$id/name'
+      path: '/name'
+      fullPath: '/api/documents/$id/name'
+      preLoaderRoute: typeof ApiDocumentsIdNameRouteImport
+      parentRoute: typeof ApiDocumentsIdRoute
+    }
+    '/api/documents/$id/thumbnail': {
+      id: '/api/documents/$id/thumbnail'
+      path: '/thumbnail'
+      fullPath: '/api/documents/$id/thumbnail'
+      preLoaderRoute: typeof ApiDocumentsIdThumbnailRouteImport
+      parentRoute: typeof ApiDocumentsIdRoute
+    }
   }
 }
 
+interface ApiDocumentsIdRouteChildren {
+  ApiDocumentsIdNameRoute: typeof ApiDocumentsIdNameRoute
+  ApiDocumentsIdThumbnailRoute: typeof ApiDocumentsIdThumbnailRoute
+}
+
+const ApiDocumentsIdRouteChildren: ApiDocumentsIdRouteChildren = {
+  ApiDocumentsIdNameRoute: ApiDocumentsIdNameRoute,
+  ApiDocumentsIdThumbnailRoute: ApiDocumentsIdThumbnailRoute,
+}
+
+const ApiDocumentsIdRouteWithChildren = ApiDocumentsIdRoute._addFileChildren(
+  ApiDocumentsIdRouteChildren,
+)
+
+interface ApiDocumentsRouteChildren {
+  ApiDocumentsIdRoute: typeof ApiDocumentsIdRouteWithChildren
+}
+
+const ApiDocumentsRouteChildren: ApiDocumentsRouteChildren = {
+  ApiDocumentsIdRoute: ApiDocumentsIdRouteWithChildren,
+}
+
+const ApiDocumentsRouteWithChildren = ApiDocumentsRoute._addFileChildren(
+  ApiDocumentsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DocsRoute: DocsRoute,
+  ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
   ApiRenderRoute: ApiRenderRoute,
+  DIdRoute: DIdRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

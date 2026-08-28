@@ -354,3 +354,281 @@
     cursor: row-resize;
   }
 }
+
+/* Documents: the list page, cards, dialogs, and the account controls. */
+@layer tokens {
+  :root {
+    --danger: #f08a8a;
+    --card-bg: #1a1d24;
+    --card-hover: #212530;
+    /* Aspect ratio of a rendered page, so previews are page-shaped. */
+    --page-ratio: 794 / 1123;
+  }
+}
+
+@layer layout {
+  .page {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+  }
+
+  .page-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-5);
+  }
+}
+
+@layer components {
+  .brand-link {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+
+  .doc-name {
+    color: var(--muted);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    margin-bottom: 1px;
+  }
+
+  /* Sized to match a button so the two sit on one line together. */
+  .button-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-sm);
+    text-decoration: none;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  .account {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    /* Reserves the row's height while the session resolves, so the header
+       does not jump when the account controls appear. */
+    min-block-size: 1.75rem;
+  }
+
+  .account-email {
+    max-inline-size: 18ch;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .account-link {
+    color: var(--muted);
+    font-size: var(--text-xs);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--text);
+    }
+  }
+
+  .doc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .doc-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    overflow: hidden;
+
+    &:hover {
+      background: var(--card-hover);
+    }
+  }
+
+  .doc-preview {
+    display: block;
+    aspect-ratio: var(--page-ratio);
+    /* White: a document page is white regardless of the app's dark chrome. */
+    background: #fff;
+    overflow: hidden;
+
+    & img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+  }
+
+  .doc-preview-empty {
+    display: grid;
+    place-items: center;
+    block-size: 100%;
+    color: #9aa0ac;
+    font-size: var(--text-xs);
+  }
+
+  .doc-meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+  }
+
+  .doc-title {
+    color: var(--text);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+
+  .doc-time {
+    color: var(--muted);
+    font-size: var(--text-xs);
+  }
+
+  .doc-actions {
+    display: flex;
+    gap: var(--space-2);
+    padding: 0 var(--space-3) var(--space-3);
+  }
+
+  button[data-variant="danger"] {
+    --btn-fg: var(--danger);
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 4rem var(--space-5);
+    text-align: center;
+
+    & h1 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    & p {
+      margin: 0;
+      color: var(--muted);
+      font-size: var(--text-sm);
+    }
+  }
+
+  .page-error {
+    margin-bottom: var(--space-5);
+    padding: var(--space-3);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius);
+    background: var(--error-bg);
+    color: var(--error-text);
+    font-size: var(--text-sm);
+  }
+
+  .dialog {
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    max-inline-size: min(24rem, calc(100vw - 2rem));
+
+    &::backdrop {
+      background: var(--scrim);
+    }
+  }
+
+  .dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5);
+
+    & h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+  }
+
+  .dialog-text {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+
+  .provider {
+    --btn-bg: #fff;
+    --btn-fg: #1f2328;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    font-weight: 500;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+
+    & input {
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+
+      &:focus-visible {
+        border-color: var(--accent);
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      &[aria-invalid="true"] {
+        border-color: var(--error-border);
+      }
+    }
+  }
+
+  .field-error {
+    margin: 0;
+    color: var(--error-text);
+    font-size: var(--text-xs);
+  }
+}

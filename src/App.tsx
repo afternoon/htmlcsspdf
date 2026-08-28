@@ -3,20 +3,37 @@ import { html as htmlLang } from "@codemirror/lang-html";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Divider } from "./Divider.tsx";
 import { describeIssue, formatCss, formatHtml } from "./document.ts";
+import { loadDraft, saveDraft } from "./draft.ts";
 import { Editor } from "./Editor.tsx";
+import { NameDialog } from "./NameDialog.tsx";
+import { SignInDialog } from "./SignInDialog.tsx";
 import { SAMPLE_CSS, SAMPLE_HTML } from "./sample.ts";
-import { loadDoc, saveDoc } from "./storage.ts";
+import type { Doc } from "./storage.ts";
 import { Toolbar } from "./Toolbar.tsx";
+import { useDocumentSave } from "./useDocumentSave.ts";
 import { useLayout } from "./useLayout.ts";
 import { useRenderer } from "./useRenderer.ts";
 
 const DEBOUNCE_MS = 1000;
 const SAVE_DEBOUNCE_MS = 300;
 
-export function App() {
+interface AppProps {
+  /** Set when editing a stored document; absent for a new one. */
+  documentId?: string;
+  documentName?: string;
+  initialContent?: Doc;
+}
+
+export function App({ documentId, documentName, initialContent }: AppProps = {}) {
   // Read on first render, not at module scope: module-level state is shared
   // across mounts and captured before any test can seed storage.
-  const [initial] = useState(loadDoc);
+  //
+  // A stored document wins outright. Otherwise a fresh visit starts from the
+  // sample, and a draft is restored only if one survives — from a refresh
+  // mid-edit, or from the sign-in round trip.
+  const [initial] = useState(
+    () => initialContent ?? loadDraft() ?? { html: SAMPLE_HTML, css: SAMPLE_CSS },
+  );
   const [html, setHtml] = useState(initial.html);
   const [css, setCss] = useState(initial.css);
   // Auto-preview is opt-in: renders cost browser time, so default to manual.
@@ -25,6 +42,7 @@ export function App() {
 
   const layout = useLayout();
   const { pdfUrl, error, rendering, render, clearError, setError } = useRenderer();
+  const save = useDocumentSave(documentId ?? null);
 
   // Debounced auto-render on edit, only while the toggle is on.
   useEffect(() => {
@@ -41,10 +59,13 @@ export function App() {
     void render(initial.html, initial.css);
   }, [render, initial]);
 
+  // Only unsaved work is drafted. A stored document already has a home, and
+  // drafting it would resurrect it over the next new document.
   useEffect(() => {
-    const timer = setTimeout(() => saveDoc({ html, css }), SAVE_DEBOUNCE_MS);
+    if (documentId) return;
+    const timer = setTimeout(() => saveDraft({ html, css }), SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [html, css]);
+  }, [html, css, documentId]);
 
   const renderNow = useCallback(() => {
     void render(html, css);
@@ -91,6 +112,14 @@ export function App() {
     a.click();
   }, [pdfUrl]);
 
+  function handleSave() {
+    save.requestSave({ html, css });
+  }
+
+  function handleName(name: string) {
+    void save.confirmName(name, { html, css });
+  }
+
   const reset = useCallback(() => {
     setHtml(SAMPLE_HTML);
     setCss(SAMPLE_CSS);
@@ -105,9 +134,23 @@ export function App() {
         onFormat={format}
         onPreview={renderNow}
         onDownload={download}
+        onSave={handleSave}
+        onSignIn={handleSave}
         formatting={formatting}
         rendering={rendering}
         canDownload={pdfUrl !== null}
+        saveState={save.state}
+        documentName={documentName}
+      />
+
+      <SignInDialog open={save.signInOpen} onClose={save.closeSignIn} />
+      <NameDialog
+        open={save.nameOpen}
+        title="Name your document"
+        submitLabel="Save document"
+        saving={save.state === "saving"}
+        onSubmit={handleName}
+        onClose={save.closeName}
       />
 
       <main

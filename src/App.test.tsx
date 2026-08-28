@@ -119,7 +119,7 @@ describe("App", () => {
     const fetchMock = vi.fn(async () => pdfResponse());
     vi.stubGlobal("fetch", fetchMock);
     localStorage.setItem(
-      "htmlcsspdf.doc.v1",
+      "htmlcsspdf.draft.v1",
       JSON.stringify({ html: "<p>hi</p>", css: "body { color:" }),
     );
 
