@@ -11,6 +11,6 @@ BETTER_AUTH_URL="http://localhost:5173"
 # From the Google Cloud Console OAuth 2.0 Client (type: Web application).
 # Authorised redirect URIs must include BOTH:
 #   http://localhost:5173/api/auth/callback/google
-#   https://htmlcsspdf.ben2.workers.dev/api/auth/callback/google
+#   https://htmlcsspdf.ben2.com/api/auth/callback/google
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""

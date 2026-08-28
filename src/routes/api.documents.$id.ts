@@ -33,7 +33,7 @@ export const Route = createFileRoute("/api/documents/$id")({
           const saved = await updateDocument(env.DB, params.id, user.id, parsed.data);
           if (!saved) return jsonError(404, "Document not found.");
 
-          void captureThumbnail(params.id, user.id, parsed.data.html, parsed.data.css);
+          await captureThumbnail(params.id, user.id, parsed.data.html, parsed.data.css);
 
           return new Response(null, { status: 204 });
         }),

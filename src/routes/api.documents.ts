@@ -24,9 +24,11 @@ export const Route = createFileRoute("/api/documents")({
 
           const { id } = await createDocument(env.DB, user.id, parsed.data);
 
-          // After the response, never as part of it: a rate-limited capture
-          // must not fail a save that already succeeded.
-          void captureThumbnail(id, user.id, parsed.data.html, parsed.data.css);
+          // Awaited, not fire-and-forget: a Worker isolate can be torn down
+          // the moment it responds, which silently discarded the capture.
+          // captureThumbnail swallows its own errors and bounds its runtime,
+          // so this can neither fail nor hang the save.
+          await captureThumbnail(id, user.id, parsed.data.html, parsed.data.css);
 
           return Response.json({ id }, { status: 201 });
         }),

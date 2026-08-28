@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/documents/$id/thumbnail")({
           const document = await loadDocument(env.DB, params.id, user.id);
           if (!document) return jsonError(404, "Document not found.");
 
-          const object = await env.THUMBNAILS?.get(thumbnailKey(params.id));
+          const object = await env.THUMBNAILS.get(thumbnailKey(params.id));
           if (!object) return jsonError(404, "No thumbnail yet.");
 
           return new Response(object.body, {

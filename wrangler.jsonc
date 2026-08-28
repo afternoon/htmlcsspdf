@@ -15,6 +15,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "THUMBNAILS",
+      "bucket_name": "htmlcsspdf-thumbnails"
+    }
+  ],
   "observability": {
     "enabled": true
   }
