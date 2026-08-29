@@ -5,7 +5,6 @@ import { Divider } from "./Divider.tsx";
 import { describeIssue, formatCss, formatHtml } from "./document.ts";
 import { loadDraft, saveDraft } from "./draft.ts";
 import { Editor } from "./Editor.tsx";
-import { NameDialog } from "./NameDialog.tsx";
 import { SignInDialog } from "./SignInDialog.tsx";
 import { SAMPLE_CSS, SAMPLE_HTML } from "./sample.ts";
 import type { Doc } from "./storage.ts";
@@ -42,7 +41,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
 
   const layout = useLayout();
   const { pdfUrl, error, rendering, render, clearError, setError } = useRenderer();
-  const save = useDocumentSave(documentId ?? null);
+  const save = useDocumentSave(documentId ?? null, documentName ?? null);
 
   // Debounced auto-render on edit, only while the toggle is on.
   useEffect(() => {
@@ -116,10 +115,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     save.requestSave({ html, css });
   }
 
-  function handleName(name: string) {
-    void save.confirmName(name, { html, css });
-  }
-
   const reset = useCallback(() => {
     setHtml(SAMPLE_HTML);
     setCss(SAMPLE_CSS);
@@ -140,18 +135,12 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
         rendering={rendering}
         canDownload={pdfUrl !== null}
         saveState={save.stateFor({ html, css })}
-        documentName={documentName}
+        documentName={save.name ?? undefined}
+        onRename={save.rename}
+        renaming={save.renaming}
       />
 
       <SignInDialog open={save.signInOpen} onClose={save.closeSignIn} />
-      <NameDialog
-        open={save.nameOpen}
-        title="Name your document"
-        submitLabel="Save document"
-        saving={save.state === "saving"}
-        onSubmit={handleName}
-        onClose={save.closeName}
-      />
 
       <main
         className="panes"

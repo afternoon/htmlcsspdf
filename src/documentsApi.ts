@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_NAME_LENGTH } from "./server/documents.ts";
+import { MAX_NAME_LENGTH } from "./documentName.ts";
 
 /**
  * The document API contract, and the client half of it.

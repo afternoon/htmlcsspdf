@@ -1,4 +1,5 @@
 import { AccountMenu } from "./AccountMenu.tsx";
+import { EditableName } from "./EditableName.tsx";
 import type { SaveState } from "./useDocumentSave.ts";
 
 interface ToolbarProps {
@@ -14,8 +15,10 @@ interface ToolbarProps {
   rendering: boolean;
   canDownload: boolean;
   saveState: SaveState;
-  /** Shown once the document has a name. */
+  /** Present once the document exists; editable in place. */
   documentName?: string;
+  onRename?: (name: string) => void;
+  renaming?: boolean;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -40,13 +43,15 @@ export function Toolbar({
   canDownload,
   saveState,
   documentName,
+  onRename,
+  renaming,
 }: ToolbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
         htmlcsspdf
-        {documentName ? (
-          <span className="doc-name">{documentName}</span>
+        {documentName !== undefined && onRename ? (
+          <EditableName name={documentName} onRename={onRename} saving={renaming} />
         ) : (
           <span className="status" data-busy={rendering || undefined}>
             {rendering ? "rendering…" : "idle"}

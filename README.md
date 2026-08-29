@@ -94,6 +94,11 @@ assets and dispatches server routes.
   on the server as the actual boundary.
 - `src/App.tsx` — three-pane UI, render lifecycle, draft persistence, error
   overlay, download and save buttons.
+- `src/EditableName.tsx` — the document name, in the header and on each card.
+  Click to edit; Enter, blur or the Save name button commits, Escape abandons.
+  Both states share every box-affecting property so the swap shifts nothing.
+- `src/documentName.ts` — naming rules shared by client and server, so the name
+  shown can never differ from the name stored.
 - `src/Editor.tsx` — CodeMirror 6 wrapper.
 - `src/Divider.tsx` — draggable split handles.
 

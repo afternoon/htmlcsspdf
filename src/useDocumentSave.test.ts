@@ -32,12 +32,14 @@ beforeEach(() => {
 });
 
 describe("resuming a save interrupted by signing in", () => {
-  it("reopens the naming dialog once the user comes back signed in", async () => {
+  // The naming dialog is gone: a resumed save now creates the document
+  // directly, so what these guard is whether the resume is signalled at all.
+  it("signals a resume once the user comes back signed in", async () => {
     markPendingSave();
 
     const { result } = renderHook(() => useDocumentSave(null));
 
-    await waitFor(() => expect(result.current.nameOpen).toBe(true));
+    await waitFor(() => expect(result.current.resumePending).toBe(true));
   });
 
   it("waits for the session before deciding", async () => {
@@ -47,12 +49,12 @@ describe("resuming a save interrupted by signing in", () => {
     stillResolving();
 
     const { result, rerender } = renderHook(() => useDocumentSave(null));
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
 
     signedIn();
     rerender();
 
-    await waitFor(() => expect(result.current.nameOpen).toBe(true));
+    await waitFor(() => expect(result.current.resumePending).toBe(true));
   });
 
   it("still resumes when the session reports signed-out before the user arrives", async () => {
@@ -66,15 +68,15 @@ describe("resuming a save interrupted by signing in", () => {
 
     session.current = { data: null, isPending: false };
     rerender();
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
 
     signedIn();
     rerender();
 
-    await waitFor(() => expect(result.current.nameOpen).toBe(true));
+    await waitFor(() => expect(result.current.resumePending).toBe(true));
   });
 
-  it("does not open the dialog for a user who is still signed out", async () => {
+  it("does not resume for a user who is still signed out", async () => {
     // Sign-in was abandoned or failed. Prompting for a name would lead
     // straight to a save that cannot succeed.
     markPendingSave();
@@ -82,7 +84,7 @@ describe("resuming a save interrupted by signing in", () => {
 
     const { result } = renderHook(() => useDocumentSave(null));
 
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
     // The flag survives rather than being burned on an inconclusive read; its
     // expiry retires it if the user never comes back.
     expect(takePendingSave()).toBe(true);
@@ -94,7 +96,7 @@ describe("resuming a save interrupted by signing in", () => {
     const { result } = renderHook(() => useDocumentSave("existing-doc-id"));
 
     await waitFor(() => expect(takePendingSave()).toBe(false));
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
   });
 
   it("ignores a pending save left over from long ago", async () => {
@@ -108,14 +110,14 @@ describe("resuming a save interrupted by signing in", () => {
     const { result } = renderHook(() => useDocumentSave(null));
 
     await waitFor(() => expect(takePendingSave()).toBe(false));
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
   });
 
-  it("leaves the dialog closed when no save was pending", async () => {
+  it("does not resume when no save was pending", async () => {
     const { result } = renderHook(() => useDocumentSave(null));
 
     await waitFor(() => expect(takePendingSave()).toBe(false));
-    expect(result.current.nameOpen).toBe(false);
+    expect(result.current.resumePending).toBe(false);
   });
 });
 

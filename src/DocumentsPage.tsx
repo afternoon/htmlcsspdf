@@ -4,23 +4,22 @@ import { AccountMenu } from "./AccountMenu.tsx";
 import { DocumentCard } from "./DocumentCard.tsx";
 import type { DocumentSummary } from "./documentsApi.ts";
 import * as api from "./documentsApi.ts";
-import { NameDialog } from "./NameDialog.tsx";
 
 /** The document list: header, a New document action, and a grid of cards. */
 export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   const router = useRouter();
-  const [renaming, setRenaming] = useState<DocumentSummary | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleRename(name: string) {
-    if (!renaming) return;
-    const target = renaming;
-    setRenaming(null);
+  async function handleRename(document: DocumentSummary, name: string) {
+    setRenamingId(document.id);
     try {
-      await api.renameDocument(target.id, name);
+      await api.renameDocument(document.id, name);
       await router.invalidate();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not rename the document.");
+    } finally {
+      setRenamingId(null);
     }
   }
 
@@ -72,22 +71,14 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
               <DocumentCard
                 key={document.id}
                 document={document}
-                onRename={setRenaming}
+                onRename={handleRename}
                 onDelete={handleDelete}
+                renaming={renamingId === document.id}
               />
             ))}
           </ul>
         )}
       </main>
-
-      <NameDialog
-        open={renaming !== null}
-        initialName={renaming?.name ?? ""}
-        title="Rename document"
-        submitLabel="Rename"
-        onSubmit={handleRename}
-        onClose={() => setRenaming(null)}
-      />
     </div>
   );
 }

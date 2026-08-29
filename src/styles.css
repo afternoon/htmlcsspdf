@@ -390,11 +390,58 @@
     }
   }
 
-  .doc-name {
-    color: var(--muted);
-    font-size: var(--text-xs);
+  /* The name is the same size and weight as the body text beside the brand,
+     and the button and input share every box-affecting property — font,
+     padding, border, line-height — so clicking to edit swaps one for the other
+     without moving anything. The border is transparent rather than absent for
+     the same reason: a visible border on focus must not add width. */
+  .name-field {
+    --btn-bg: transparent;
+    --btn-fg: var(--text);
+
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 1rem;
     font-weight: 400;
-    margin-bottom: 1px;
+    line-height: 1.2;
+    letter-spacing: normal;
+    text-align: start;
+  }
+
+  button.name-field {
+    cursor: text;
+
+    &:hover {
+      border-color: var(--border);
+    }
+  }
+
+  input.name-field {
+    /* Sized to the header rather than the content, so the field does not
+       resize as the name is typed. */
+    inline-size: 18ch;
+    border-color: var(--accent);
+    background: var(--bg);
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .name-edit {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .name-save {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
   }
 
   /* Sized to match a button so the two sit on one line together. */
@@ -559,7 +606,7 @@
   }
 
   .dialog {
-    padding: 0;
+    padding: 0.2rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--panel);

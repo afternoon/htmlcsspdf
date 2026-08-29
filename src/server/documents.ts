@@ -1,3 +1,4 @@
+import { normalizeName } from "../documentName.ts";
 import { sanitizeCss, sanitizeHtml } from "../sanitize.ts";
 
 /**
@@ -46,31 +47,6 @@ export interface NewDocument extends DocumentContent {
   name: string;
 }
 
-/** Longest accepted document name, matching what the UI allows. */
-export const MAX_NAME_LENGTH = 200;
-
-/** Fallback for a document saved without a usable name. */
-const DEFAULT_NAME = "Untitled document";
-
-/**
- * Normalise a user-supplied name: collapse whitespace, trim, cap the length,
- * and fall back when nothing usable remains.
- */
-export function normalizeName(name: string): string {
-  // Control and format characters go first. They are not cosmetic: a name is
-  // shown on its card and inside the delete confirmation, and U+202E
-  // (right-to-left override) makes a name render as something other than what
-  // it is — the classic filename-spoofing trick, here aimed at a destructive
-  // action. Zero-width characters give a name that looks blank but is not,
-  // which is also why this runs before the empty check.
-  const stripped = name.replace(/[\p{Cc}\p{Cf}]/gu, "");
-  const collapsed = stripped.replace(/\s+/gu, " ").trim();
-  if (!collapsed) return DEFAULT_NAME;
-  // Truncate by code point, so a name ending in an emoji cannot be cut through
-  // the middle of a surrogate pair and stored as broken text.
-  return [...collapsed].slice(0, MAX_NAME_LENGTH).join("");
-}
-
 export async function createDocument(
   db: D1Database,
   userId: string,
@@ -92,7 +68,7 @@ export async function createDocument(
       userId,
       normalizeName(input.name),
       sanitizeHtml(input.html),
-      input.css,
+      sanitizeCss(input.css),
       now,
       now,
     )
