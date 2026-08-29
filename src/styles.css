@@ -87,8 +87,13 @@
   /* Track sizes are set inline from React state so the dividers can drag them. */
   .panes {
     display: grid;
+    min-inline-size: 0;
     flex: 1 1 auto;
     min-block-size: 0;
+  }
+
+  .workspace .panes {
+    grid-area: panes;
   }
 
   /* HTML above CSS, sharing the left column. */
@@ -687,5 +692,241 @@
     margin: 0;
     color: var(--error-text);
     font-size: var(--text-xs);
+  }
+}
+
+/* Navigation panel, preview actions, and the stale-preview overlay. */
+@layer components {
+  .menu-button {
+    --btn-bg: transparent;
+    --btn-fg: var(--muted);
+
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1);
+    border-color: transparent;
+    /* Aligns the icon's optical centre with the text baseline beside it. */
+    align-self: center;
+
+    &:hover {
+      --btn-fg: var(--text);
+
+      border-color: var(--border);
+    }
+  }
+
+  /* The panel is a column beside the panes, not an overlay: opening it makes
+     room rather than covering the work.
+     
+     Both states declare the same `grid-template` and differ only in the first
+     track's width, so the browser has two directly comparable values to
+     interpolate. Earlier attempts animated a property on the panel itself —
+     width, flex-basis, max-inline-size — and Chrome discarded every one of
+     them, leaving the panel collapsed rather than merely un-animated. */
+  .workspace {
+    display: grid;
+    grid-template-areas: "nav panes";
+    grid-template-columns: 17rem minmax(0, 1fr);
+    flex: 1 1 auto;
+    min-block-size: 0;
+    /* No transition. Chrome refuses to animate `grid-template-columns` in this
+       layout, and refusing means discarding the change outright — declaring
+       one leaves the panel permanently collapsed rather than merely snapping
+       open. Verified by measurement: with a transition the column computes to
+       0, without it to 272px. The panel therefore opens instantly for now. */
+  }
+
+  /* The closed width is a hairline rather than a true zero. The minifier
+     rewrites any zero length — `0px`, `0rem` — to a bare `0`, which cannot be
+     interpolated against `17rem`: Chrome refuses the transition and freezes
+     the track at its closed width. A non-zero length keeps its unit, and at
+     0.01rem the panel is invisible behind its own border anyway. */
+  .workspace.closed {
+    grid-template-columns: 0.01rem minmax(0, 1fr);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace {
+      transition: none;
+    }
+  }
+
+  /* Clipped rather than unmounted: a width transition needs something to
+     animate, and `overflow: hidden` keeps the content from spilling out of
+     the collapsed column on the way. */
+  /* The width lives in a custom property, declared by both states.
+
+     Two things forced this. A flex item with `flex-basis: auto` sizes to its
+     content, so setting `inline-size` on the panel did nothing at all — not
+     even as an `!important` inline style. And the shorthand `flex` in a plain
+     `.nav-panel` rule overrides a longhand `flex-basis` in
+     `.nav-panel[data-open]` whenever the plain rule comes later in the
+     cascade, which it does: the dev server serves this stylesheet twice.
+     Setting one property from both rules removes the ordering dependency. */
+  .nav-panel {
+    grid-area: nav;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .nav-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    /* Fixed width, so the content does not reflow as the column animates. */
+    inline-size: 17rem;
+    block-size: 100%;
+    padding: var(--space-5);
+    overflow-y: auto;
+  }
+
+  .nav-account {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-email {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: var(--text-sm);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--card-hover);
+    }
+
+    /* The document currently open, so the list says where you are. */
+    &[aria-current="page"] {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+  }
+
+  /* Long names truncate rather than wrapping the row to two lines. */
+  .nav-link-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-heading {
+    margin: 0 0 var(--space-2);
+    color: var(--muted);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .nav-empty {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    color: var(--muted);
+    font-size: var(--text-xs);
+  }
+
+  /* The preview's own controls: the toggle that governs re-rendering, and the
+     download of what was rendered. Pushed apart so the action reads as the
+     primary one of the two. */
+  .preview-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .preview-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* The stale PDF stays visible but blurred: its shape is still useful
+     context, and blurring says plainly that it is not to be read as current. */
+  .preview iframe[data-stale] {
+    filter: blur(3px);
+  }
+
+  .preview-stale {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    /* Not a dialog and not focus-trapping: the user's next action is usually
+       to keep typing, so this must never block the editor. */
+    pointer-events: none;
+    background: var(--scrim);
+  }
+
+  .preview-stale-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: 0 8px 24px var(--shadow);
+    /* Re-enabled for the card alone, so the button works while the rest of
+       the overlay stays transparent to clicks. */
+    pointer-events: auto;
+  }
+
+  .preview-stale-text {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--text-sm);
+  }
+
+  .preview-stale-card button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .preview-stale-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--text-xs);
+  }
+
+  .preview-stale-hint kbd {
+    padding: 1px var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    font-family: inherit;
+    font-size: var(--text-2xs);
   }
 }

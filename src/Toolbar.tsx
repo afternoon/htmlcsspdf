@@ -1,19 +1,15 @@
-import { AccountMenu } from "./AccountMenu.tsx";
+import { Menu } from "lucide-react";
 import { EditableName } from "./EditableName.tsx";
 import type { SaveState } from "./useDocumentSave.ts";
 
 interface ToolbarProps {
-  autoPreview: boolean;
-  onAutoPreviewChange: (enabled: boolean) => void;
-  onReset: () => void;
-  onFormat: () => void;
-  onPreview: () => void;
-  onDownload: () => void;
-  onSave: () => void;
-  onSignIn: () => void;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  autoFormat: boolean;
+  onAutoFormatChange: (enabled: boolean) => void;
   formatting: boolean;
   rendering: boolean;
-  canDownload: boolean;
+  onSave: () => void;
   saveState: SaveState;
   /** Present once the document exists; editable in place. */
   documentName?: string;
@@ -28,19 +24,21 @@ const SAVE_LABEL: Record<SaveState, string> = {
   error: "Retry save",
 };
 
-/** The application header: status and the document actions. Renders only. */
+/**
+ * The application header.
+ *
+ * One primary action — Save. Everything that used to sit beside it has moved
+ * to where it belongs: navigation into the left panel, Download beneath the
+ * PDF it produces, and re-rendering onto the preview it affects.
+ */
 export function Toolbar({
-  autoPreview,
-  onAutoPreviewChange,
-  onReset,
-  onFormat,
-  onPreview,
-  onDownload,
-  onSave,
-  onSignIn,
+  menuOpen,
+  onToggleMenu,
+  autoFormat,
+  onAutoFormatChange,
   formatting,
   rendering,
-  canDownload,
+  onSave,
   saveState,
   documentName,
   onRename,
@@ -49,6 +47,15 @@ export function Toolbar({
   return (
     <header className="topbar">
       <div className="brand">
+        <button
+          type="button"
+          className="menu-button"
+          onClick={onToggleMenu}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+        >
+          <Menu size={18} aria-hidden="true" />
+        </button>
         htmlcsspdf
         {documentName !== undefined && onRename ? (
           <EditableName name={documentName} onRename={onRename} saving={renaming} />
@@ -58,37 +65,16 @@ export function Toolbar({
           </span>
         )}
       </div>
+
       <div className="actions">
         <label className="toggle">
           <input
             type="checkbox"
-            checked={autoPreview}
-            onChange={(e) => onAutoPreviewChange(e.target.checked)}
+            checked={autoFormat}
+            onChange={(e) => onAutoFormatChange(e.target.checked)}
           />
-          <span>Auto preview</span>
+          <span>{formatting ? "Formatting…" : "Format HTML/CSS"}</span>
         </label>
-        <button type="button" onClick={onReset} data-variant="ghost">
-          Reset
-        </button>
-        <button
-          type="button"
-          onClick={onFormat}
-          disabled={formatting}
-          data-variant="ghost"
-        >
-          {formatting ? "Formatting…" : "Format"}
-        </button>
-        <button type="button" onClick={onPreview} disabled={rendering}>
-          Preview
-        </button>
-        <button
-          type="button"
-          onClick={onDownload}
-          disabled={!canDownload}
-          data-variant="ghost"
-        >
-          Download PDF
-        </button>
         <button
           type="button"
           onClick={onSave}
@@ -97,7 +83,6 @@ export function Toolbar({
         >
           {SAVE_LABEL[saveState]}
         </button>
-        <AccountMenu onSignIn={onSignIn} />
       </div>
     </header>
   );

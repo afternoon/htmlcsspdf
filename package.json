@@ -43,6 +43,7 @@
     "@tanstack/react-start": "^1.168.49",
     "better-auth": "^1.7.2",
     "codemirror": "^6.0.2",
+    "lucide-react": "^1.37.0",
     "parse5": "^8.0.1",
     "prettier": "^3.9.6",
     "react": "^19.2.8",

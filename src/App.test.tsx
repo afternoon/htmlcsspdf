@@ -1,7 +1,25 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import { render as renderComponent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.tsx";
+
+/**
+ * The editor renders navigation links, so it needs a router the way it has one
+ * in the real app. Rendering it bare only ever worked by accident.
+ */
+function render(ui: React.ReactElement) {
+  const rootRoute = createRootRoute({ component: () => ui });
+  const router = createRouter({ routeTree: rootRoute });
+  return renderComponent(<RouterProvider router={router} />);
+}
+
+/** The router mounts asynchronously; most assertions need it settled first. */
+async function renderApp(ui: React.ReactElement) {
+  const result = render(ui);
+  await screen.findByRole("textbox", { name: "HTML" });
+  return result;
+}
 
 /** A render response carrying a minimal but valid PDF body. */
 function pdfResponse() {
@@ -39,18 +57,18 @@ describe("App", () => {
       "fetch",
       vi.fn(async () => pdfResponse()),
     );
-    render(<App />);
+    await renderApp(<App />);
 
     expect(screen.getByRole("textbox", { name: "HTML" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "CSS" })).toBeInTheDocument();
   });
 
-  it("names each resize handle", () => {
+  it("names each resize handle", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => pdfResponse()),
     );
-    render(<App />);
+    await renderApp(<App />);
 
     const separators = screen.getAllByRole("separator");
     for (const separator of separators) {
@@ -58,12 +76,12 @@ describe("App", () => {
     }
   });
 
-  it("keeps a live region in the DOM before any error occurs", () => {
+  it("keeps a live region in the DOM before any error occurs", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => pdfResponse()),
     );
-    render(<App />);
+    await renderApp(<App />);
 
     // Present but hidden — a region inserted with its first message is often
     // missed by screen readers.
@@ -126,33 +144,44 @@ describe("App", () => {
     render(<App />);
 
     // `hidden` keeps the region out of the a11y tree until it has a message,
-    // so wait on the visible text rather than the role.
-    expect(await screen.findByText(/CSS/)).toBeVisible();
+    // so wait on the error card's own text rather than the role. Matched
+    // strictly: "CSS" alone also appears in the pane label and the format
+    // toggle.
+    expect(await screen.findByText(/^CSS:/)).toBeVisible();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("keeps the download action unavailable until a PDF exists", () => {
+  it("keeps the download action unavailable until a PDF exists", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => errorResponse(500, { error: "nope" })),
     );
-    render(<App />);
+    await renderApp(<App />);
 
     expect(screen.getByRole("button", { name: "Download PDF" })).toBeDisabled();
   });
 
-  it("renders on demand when Preview is pressed", async () => {
+  it("offers to update the preview once the content moves on", async () => {
     const fetchMock = vi.fn(async () => pdfResponse());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(<App />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    expect(
+      screen.queryByRole("button", { name: /update preview/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("textbox", { name: "HTML" }));
+    await user.keyboard("x");
+
+    const update = await screen.findByRole("button", { name: /update preview/i });
+    await user.click(update);
+
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
-  it("does not re-render while auto preview is off", async () => {
+  it("does not re-render until asked", async () => {
     const fetchMock = vi.fn(async () => pdfResponse());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -162,8 +191,36 @@ describe("App", () => {
     await user.click(screen.getByRole("textbox", { name: "HTML" }));
     await user.keyboard("x");
 
-    // Well past the 1s debounce.
+    // Long enough that any debounce would have fired.
     await new Promise((resolve) => setTimeout(resolve, 1300));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-renders on a pause once auto preview is on", async () => {
+    const fetchMock = vi.fn(async () => pdfResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    await renderApp(<App />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("checkbox", { name: "Auto preview" }));
+    await user.click(screen.getByRole("textbox", { name: "HTML" }));
+    await user.keyboard("x");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  });
+
+  it("re-renders on the keyboard shortcut", async () => {
+    const fetchMock = vi.fn(async () => pdfResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("textbox", { name: "HTML" }));
+    await user.keyboard("x");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });

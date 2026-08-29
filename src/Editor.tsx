@@ -72,15 +72,28 @@ export function Editor({ value, language, onChange, label }: EditorProps) {
     });
   }, [language]);
 
-  // Sync in values that came from outside the editor (e.g. a reset), without
-  // clobbering the cursor while the user is typing.
+  // Sync in values that came from outside the editor — auto-formatting is the
+  // main source — without throwing away where the user was.
+  //
+  // Replacing the whole document moves the cursor to the start, which makes
+  // reformat-while-typing unusable. The selection is clamped to the new length
+  // and reapplied, so the caret stays put through a reflow. Formatting rarely
+  // moves text far, so holding the offset is closer than resetting it.
   useEffect(() => {
     const instance = view.current;
     if (!instance) return;
     const current = instance.state.doc.toString();
     if (current === value) return;
+
+    const { anchor, head } = instance.state.selection.main;
+    const clamp = (position: number) => Math.min(position, value.length);
+
     instance.dispatch({
       changes: { from: 0, to: current.length, insert: value },
+      selection: { anchor: clamp(anchor), head: clamp(head) },
+      // The document is being rewritten under the user, so keep their place on
+      // screen rather than scrolling to wherever the new selection lands.
+      scrollIntoView: false,
     });
   }, [value]);
 

@@ -13,6 +13,8 @@ export interface Renderer {
   render: (html: string, css: string) => Promise<void>;
   clearError: () => void;
   setError: (error: RenderError) => void;
+  /** True when the editor has moved on from what the preview shows. */
+  isStale: (html: string, css: string) => boolean;
 }
 
 /**
@@ -31,6 +33,12 @@ export function useRenderer(): Renderer {
   const seqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const pdfUrlRef = useRef<string | null>(null);
+  // What the visible PDF was rendered from. Compared by content rather than
+  // tracked with a dirty flag, so undoing back to the rendered text clears the
+  // stale state by itself.
+  const [renderedFrom, setRenderedFrom] = useState<{ html: string; css: string } | null>(
+    null,
+  );
 
   const render = useCallback(async (html: string, css: string) => {
     abortRef.current?.abort();
@@ -86,6 +94,7 @@ export function useRenderer(): Renderer {
       const previous = pdfUrlRef.current;
       pdfUrlRef.current = url;
       setPdfUrl(url);
+      setRenderedFrom({ html, css });
       setError(null);
       if (previous) URL.revokeObjectURL(previous);
     } catch (e) {
@@ -116,5 +125,14 @@ export function useRenderer(): Renderer {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { pdfUrl, error, rendering, render, clearError, setError };
+  const isStale = useCallback(
+    (html: string, css: string) => {
+      // Nothing rendered yet is not stale; the preview says so itself.
+      if (!renderedFrom) return false;
+      return renderedFrom.html !== html || renderedFrom.css !== css;
+    },
+    [renderedFrom],
+  );
+
+  return { pdfUrl, error, rendering, render, clearError, setError, isStale };
 }
