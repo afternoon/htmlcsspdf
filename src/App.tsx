@@ -1,15 +1,16 @@
 import { css as cssLang } from "@codemirror/lang-css";
 import { html as htmlLang } from "@codemirror/lang-html";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppShell } from "./AppShell.tsx";
 import { Divider } from "./Divider.tsx";
 import { loadDraft, saveDraft } from "./draft.ts";
+import { EditableName } from "./EditableName.tsx";
 import { Editor } from "./Editor.tsx";
-import { NavigationMenu } from "./NavigationMenu.tsx";
+import { EditorActions } from "./EditorActions.tsx";
 import { PreviewPane } from "./PreviewPane.tsx";
 import { SignInDialog } from "./SignInDialog.tsx";
 import { SAMPLE_CSS, SAMPLE_HTML } from "./sample.ts";
 import type { Doc } from "./storage.ts";
-import { Toolbar } from "./Toolbar.tsx";
 import { useAutoFormat } from "./useAutoFormat.ts";
 import { useDocumentSave } from "./useDocumentSave.ts";
 import { useLayout } from "./useLayout.ts";
@@ -37,7 +38,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   );
   const [html, setHtml] = useState(initial.html);
   const [css, setCss] = useState(initial.css);
-  const [menuOpen, setMenuOpen] = useState(false);
   // Opt-in: every render costs browser time against a daily quota, so the
   // default is to render only when asked.
   const [autoPreview, setAutoPreview] = useState(false);
@@ -81,25 +81,16 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
 
   // Cmd/Ctrl+Enter re-renders. The only way to render besides the button on
   // the stale overlay, now that the Preview button is gone.
-  //
-  // Escape closes the navigation panel: it is not a dialog, so nothing gives
-  // it that behaviour for free, and a panel with no keyboard dismissal would
-  // strand anyone not using a mouse.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();
         renderNow();
       }
-      if (e.key === "Escape") setMenuOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [renderNow]);
-
-  function toggleMenu() {
-    setMenuOpen((open) => !open);
-  }
 
   function handleSave() {
     save.requestSave({ html, css });
@@ -113,36 +104,33 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     a.click();
   }
 
-  return (
-    <div className="app">
-      <Toolbar
-        menuOpen={menuOpen}
-        onToggleMenu={toggleMenu}
-        autoFormat={autoFormat.enabled}
-        onAutoFormatChange={autoFormat.setEnabled}
-        formatting={autoFormat.formatting}
-        rendering={rendering}
-        onSave={handleSave}
-        saveState={save.stateFor({ html, css })}
-        documentName={save.name ?? undefined}
-        onRename={save.rename}
-        renaming={save.renaming}
-      />
+  const title =
+    save.name === null ? (
+      <span className="status" data-busy={rendering || undefined}>
+        {rendering ? "rendering…" : "idle"}
+      </span>
+    ) : (
+      <EditableName name={save.name} onRename={save.rename} saving={save.renaming} />
+    );
 
+  return (
+    <>
       <SignInDialog open={save.signInOpen} onClose={save.closeSignIn} />
 
-      {/* The panel is a sibling of the panes and a column of the same grid, so
-          opening it makes room rather than covering the work. It stays mounted
-          while closed — a width transition needs both ends to animate, and an
-          unmounted element has no width to animate from. */}
-      <div className={`workspace ${menuOpen ? "" : "closed"}`}>
-        <NavigationMenu
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          onSignIn={handleSave}
-          currentDocumentId={save.documentId ?? undefined}
-        />
-
+      <AppShell
+        title={title}
+        currentDocumentId={save.documentId ?? undefined}
+        onSignIn={handleSave}
+        actions={
+          <EditorActions
+            autoFormat={autoFormat.enabled}
+            onAutoFormatChange={autoFormat.setEnabled}
+            formatting={autoFormat.formatting}
+            onSave={handleSave}
+            saveState={save.stateFor({ html, css })}
+          />
+        }
+      >
         <main
           className="panes"
           style={{
@@ -197,7 +185,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
             onDownload={handleDownload}
           />
         </main>
-      </div>
-    </div>
+      </AppShell>
+    </>
   );
 }

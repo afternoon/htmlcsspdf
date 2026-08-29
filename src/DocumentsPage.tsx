@@ -1,6 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { AccountMenu } from "./AccountMenu.tsx";
+import { AppShell } from "./AppShell.tsx";
 import { DocumentCard } from "./DocumentCard.tsx";
 import type { DocumentSummary } from "./documentsApi.ts";
 import * as api from "./documentsApi.ts";
@@ -35,22 +35,15 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   }
 
   return (
-    <div className="page">
-      <header className="topbar">
-        <div className="brand">
-          <Link to="/" className="brand-link">
-            htmlcsspdf
-          </Link>
-          <span className="status">documents</span>
-        </div>
-        <div className="actions">
-          <AccountMenu onSignIn={() => router.navigate({ to: "/" })} />
-          <Link to="/" className="button-link">
-            New document
-          </Link>
-        </div>
-      </header>
-
+    <AppShell
+      title={<span className="status">documents</span>}
+      onSignIn={() => router.navigate({ to: "/" })}
+      actions={
+        <Link to="/" className="button-link">
+          New document
+        </Link>
+      }
+    >
       <main className="page-body">
         {/* Live region stays mounted so failures are announced when they land. */}
         <div role="alert" className="page-error" hidden={!error}>
@@ -79,6 +72,6 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
           </ul>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

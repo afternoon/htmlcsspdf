@@ -374,14 +374,19 @@
 }
 
 @layer layout {
+  /* Standalone screens — a load failure, a missing document — that render
+     outside the shell and so have no header or navigation panel. */
   .page {
     display: flex;
     flex-direction: column;
     block-size: 100%;
   }
 
+  /* Pages inside the shell put their content in the same grid area the editor
+     panes occupy, so the navigation panel displaces every page alike. */
   .page-body {
-    flex: 1;
+    grid-area: panes;
+    min-inline-size: 0;
     overflow-y: auto;
     padding: var(--space-5);
   }
