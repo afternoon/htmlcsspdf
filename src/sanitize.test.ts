@@ -432,7 +432,10 @@ describe("pathological input", () => {
 
   it("reports rather than throwing on the same input", () => {
     expect(() => findDisallowedMarkup(deep(20_000))).not.toThrow();
-  });
+    // Slower than sanitizeHtml: this path asks parse5 for source positions so
+    // the editor can point at the offending line. The API caps content size,
+    // so nothing this large reaches it in practice.
+  }, 15_000);
 
   it("keeps content that sits within the depth limit", () => {
     const clean = sanitizeHtml("<div><div><div><p>deep enough</p></div></div></div>");

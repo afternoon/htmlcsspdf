@@ -36,7 +36,13 @@ function DocumentEditor() {
   if (!document) return <SignedOut />;
 
   return (
+    // Keyed on the document, so switching between two of them builds a fresh
+    // editor rather than reusing the current one. App seeds its content, name
+    // and id through `useState` initialisers, which run only on mount — without
+    // this, navigating from one document to another left the previous name in
+    // the header and the previous entry highlighted in the panel.
     <App
+      key={document.id}
       documentId={document.id}
       documentName={document.name}
       initialContent={{ html: document.html, css: document.css }}
