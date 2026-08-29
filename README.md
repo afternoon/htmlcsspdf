@@ -203,6 +203,32 @@ Two isolation rules go with that reuse, both in `src/server/render.ts`:
   `document.write`, so inline script would otherwise run. The sanitiser already
   strips it; this makes a sanitiser bypass inert rather than exploitable.
 
+## React Compiler
+
+Enabled in `vite.config.ts` via `react({ compiler: true })`, so components are
+written without `memo`, `useMemo` or `useCallback` and let the compiler memoise
+— which it does more precisely than hand-written dependency arrays.
+
+Two things to know if you touch this:
+
+- It is `compiler: true`, **not** a `babel.plugins` entry. On Vite 8 this plugin
+  transforms with oxc and only reaches for Babel when asked; passing
+  `babel-plugin-react-compiler` through `babel` is accepted silently and does
+  nothing at all. The only dependency needed is `oxc-transform-react`.
+- The compiler bails out on Rules of React violations rather than failing
+  loudly, so `useHookAtTopLevel` and `useExhaustiveDependencies` are enabled in
+  `biome.json` to make those visible.
+
+To check it is actually running, look for memo caches in the client bundle:
+
+```sh
+bun run build && grep -c '\.c)(' dist/client/assets/*.js
+```
+
+The pre-existing `useCallback` calls in `App.tsx`, `Divider.tsx` and
+`useLayout.ts` are deliberately left alone — `renderNow` in particular is
+load-bearing for an effect dependency.
+
 ## Testing
 
 ```sh

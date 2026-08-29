@@ -6,7 +6,7 @@ import { SignedOut } from "../SignedOut.tsx";
 
 /** Read from D1 directly; see the note in routes/docs.tsx. */
 const loadDocument = createServerFn()
-  .inputValidator((id: string) => id)
+  .validator((id: string) => id)
   .handler(async ({ data: id }): Promise<DocumentDetail | null | undefined> => {
     const { loadDocumentForRequest } = await import("../server/loaderData.ts");
     return (await loadDocumentForRequest(id)) as DocumentDetail | null | undefined;

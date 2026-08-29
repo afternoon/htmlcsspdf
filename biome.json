@@ -22,7 +22,8 @@
   "linter": {
     "rules": {
       "correctness": {
-        "useExhaustiveDependencies": "warn"
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error"
       }
     }
   },
