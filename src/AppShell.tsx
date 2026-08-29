@@ -48,16 +48,20 @@ export function AppShell({
   return (
     <div className="app">
       <header className="topbar">
+        {/* The icon sits outside `.brand` deliberately: that row aligns its
+            children on the text baseline, and a graphic has none — including
+            it dragged the wordmark off centre in the bar. */}
+        <button
+          type="button"
+          className="menu-button"
+          onClick={toggleMenu}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+        >
+          <Menu size={18} aria-hidden="true" />
+        </button>
+
         <div className="brand">
-          <button
-            type="button"
-            className="menu-button"
-            onClick={toggleMenu}
-            aria-expanded={menuOpen}
-            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
-          >
-            <Menu size={18} aria-hidden="true" />
-          </button>
           htmlcsspdf
           {title}
         </div>

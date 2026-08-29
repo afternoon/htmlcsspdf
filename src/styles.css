@@ -76,7 +76,9 @@
   .topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /* The menu icon and brand sit together at the start; the actions are
+       pushed to the end by the brand's auto margin. */
+    justify-content: flex-start;
     flex: 0 0 auto;
     padding-inline: var(--space-4);
     block-size: 3rem;
@@ -150,6 +152,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    margin-inline-start: auto;
   }
 
   .toggle {
@@ -708,10 +711,11 @@
 
     display: inline-flex;
     align-items: center;
+    /* Sits at the start of the header row, not inside `.brand`, so its box
+       plays no part in the baseline the wordmark aligns to. */
+    margin-inline-end: var(--space-3);
     padding: var(--space-1);
     border-color: transparent;
-    /* Aligns the icon's optical centre with the text baseline beside it. */
-    align-self: center;
 
     &:hover {
       --btn-fg: var(--text);
