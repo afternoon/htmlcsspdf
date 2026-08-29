@@ -116,9 +116,12 @@
 }
 
 @layer components {
+  /* Baseline, not flex-end: the name beside the brand is a button with padding
+     and a border below its text, so aligning box bottoms pushes its baseline
+     up. `baseline` aligns the text itself, which is what reads as level. */
   .brand {
     display: flex;
-    align-items: flex-end;
+    align-items: baseline;
     gap: var(--space-3);
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -127,7 +130,6 @@
   .status {
     --status-color: var(--muted);
 
-    margin-bottom: 1px;
     color: var(--status-color);
     font-size: 0.6875rem;
     font-weight: 400;
