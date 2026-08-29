@@ -219,9 +219,28 @@ function isAllowedElement(el: Element): boolean {
   return el.namespaceURI === HTML_NS && ALLOWED_ELEMENTS.has(el.tagName.toLowerCase());
 }
 
+/**
+ * How deep a document may nest before the rest of that branch is discarded.
+ *
+ * Both walkers recurse over depth, and a deeply nested document is cheap to
+ * send: `"<div>".repeat(20000)` is 100kB and overflowed the stack, surfacing as
+ * an unhandled 500 on save and a crashed React tree in the editor. Workers has
+ * a smaller stack than Node, so its real ceiling is lower still.
+ *
+ * A print document is never remotely this deep, so the limit costs nothing
+ * legitimate — and truncating one branch keeps the rest of the document rather
+ * than failing the whole save.
+ */
+const MAX_DEPTH = 256;
+
 /** Remove disallowed elements and attributes from a parsed tree, in place. */
-function scrub(node: Node): void {
+function scrub(node: Node, depth = 0): void {
   if (!hasChildNodes(node)) return;
+
+  if (depth >= MAX_DEPTH) {
+    node.childNodes = [] as typeof node.childNodes;
+    return;
+  }
 
   const kept: Node[] = [];
   for (const child of node.childNodes) {
@@ -239,7 +258,7 @@ function scrub(node: Node): void {
           (!URL_ATTRIBUTES.has(attr.name.toLowerCase()) || isSafeUrl(attr.value)),
       );
     }
-    scrub(child);
+    scrub(child, depth + 1);
     kept.push(child);
   }
   node.childNodes = kept as typeof node.childNodes;
@@ -287,7 +306,11 @@ export function findDisallowedMarkup(html: string): Issue[] {
     ? parse(html, { sourceCodeLocationInfo: true })
     : parseFragment(html, { sourceCodeLocationInfo: true });
 
-  const visit = (node: Node): void => {
+  const visit = (node: Node, depth = 0): void => {
+    // Bounded for the same reason as `scrub`: this runs in the editor on every
+    // keystroke, and a stack overflow here crashes the React tree.
+    if (depth >= MAX_DEPTH) return;
+
     if (isElement(node)) {
       const line = node.sourceCodeLocation?.startLine;
       const tagName = node.tagName.toLowerCase();
@@ -322,10 +345,33 @@ export function findDisallowedMarkup(html: string): Issue[] {
     }
 
     if (hasChildNodes(node)) {
-      for (const child of node.childNodes) visit(child);
+      for (const child of node.childNodes) visit(child, depth + 1);
     }
   };
 
   visit(root);
   return issues;
+}
+
+/**
+ * Neutralise CSS that would escape its `<style>` element.
+ *
+ * CSS reaches the browser inside `<style>`, and the HTML parser ends that
+ * element at the first `</style`. Anything after it is parsed as markup, in
+ * HTML context, without ever passing through the allowlist above — so an
+ * unsanitised CSS pane is a complete bypass of the HTML sanitiser. It was one:
+ * `body{}</style><script>alert(1)</script>` produced a real script element in
+ * the rendered document, and `<meta http-equiv=refresh>` and `<iframe>` work
+ * there even with JavaScript disabled.
+ *
+ * Only the closing sequence is touched. `<` is otherwise legal CSS — media
+ * queries use it, and content strings may hold anything — so escaping more
+ * would break valid stylesheets. The backslash is a CSS escape, inert inside a
+ * string or ident but no longer parsed as a tag terminator by the HTML parser.
+ *
+ * Not a full CSS parser: the property surface is deliberately unrestricted, so
+ * this guards the one construct that can leave CSS context.
+ */
+export function sanitizeCss(css: string): string {
+  return css.replace(/<\/(?=\s*style)/gi, "<\\/");
 }

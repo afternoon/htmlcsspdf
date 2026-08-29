@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -24,12 +24,13 @@ const BOB = "user-bob";
 /** Adapt node:sqlite to the small slice of the D1 API the queries use. */
 function createTestDb(): { db: D1Database; raw: DatabaseSync } {
   const raw = new DatabaseSync(":memory:");
-  // Read from the project root: the real migration, so schema drift fails here.
-  const migration = readFileSync(
-    join(process.cwd(), "migrations/0001_initial.sql"),
-    "utf8",
-  );
-  raw.exec(migration);
+  // Every migration, in order, from the project root — so these tests run
+  // against the same schema production has, and schema drift fails here rather
+  // than in a deploy.
+  const dir = join(process.cwd(), "migrations");
+  for (const file of readdirSync(dir).sort()) {
+    if (file.endsWith(".sql")) raw.exec(readFileSync(join(dir, file), "utf8"));
+  }
 
   for (const id of [ALICE, BOB]) {
     raw
@@ -79,7 +80,7 @@ describe("ownership", () => {
     const { id } = await createDocument(db, ALICE, DOC);
 
     const updated = await updateDocument(db, id, BOB, { html: "<p>hacked</p>", css: "" });
-    expect(updated).toBe(false);
+    expect(updated).toBeNull();
 
     const doc = await loadDocument(db, id, ALICE);
     expect(doc?.html).toBe(DOC.html);
@@ -114,7 +115,8 @@ describe("ownership", () => {
   it("does not let one user mark a thumbnail on another's document", async () => {
     const { id } = await createDocument(db, ALICE, DOC);
 
-    expect(await markThumbnail(db, id, BOB)).toBe(false);
+    const { revision } = (await loadDocument(db, id, ALICE)) as { revision: number };
+    expect(await markThumbnail(db, id, BOB, revision)).toBe(false);
     expect((await loadDocument(db, id, ALICE))?.thumbnailUpdatedAt).toBeNull();
   });
 
@@ -168,9 +170,9 @@ describe("updateDocument", () => {
   it("replaces content and reports success", async () => {
     const { id } = await createDocument(db, ALICE, DOC);
 
-    expect(await updateDocument(db, id, ALICE, { html: "<p>new</p>", css: "p{}" })).toBe(
-      true,
-    );
+    expect(
+      await updateDocument(db, id, ALICE, { html: "<p>new</p>", css: "p{}" }),
+    ).not.toBeNull();
 
     const doc = await loadDocument(db, id, ALICE);
     expect(doc?.html).toBe("<p>new</p>");
@@ -193,7 +195,8 @@ describe("updateDocument", () => {
 
   it("clears a stale thumbnail, since the content it showed is gone", async () => {
     const { id } = await createDocument(db, ALICE, DOC);
-    await markThumbnail(db, id, ALICE);
+    const before = (await loadDocument(db, id, ALICE)) as { revision: number };
+    await markThumbnail(db, id, ALICE, before.revision);
     expect((await loadDocument(db, id, ALICE))?.thumbnailUpdatedAt).not.toBeNull();
 
     await updateDocument(db, id, ALICE, { html: "<p>different</p>", css: "" });
@@ -201,7 +204,27 @@ describe("updateDocument", () => {
   });
 
   it("reports failure for an unknown document", async () => {
-    expect(await updateDocument(db, "nope", ALICE, { html: "", css: "" })).toBe(false);
+    expect(await updateDocument(db, "nope", ALICE, { html: "", css: "" })).toBeNull();
+  });
+});
+
+describe("markThumbnail", () => {
+  it("marks a thumbnail that still depicts the stored content", async () => {
+    const { id, revision } = await createDocument(db, ALICE, DOC);
+
+    expect(await markThumbnail(db, id, ALICE, revision)).toBe(true);
+    expect((await loadDocument(db, id, ALICE))?.thumbnailUpdatedAt).not.toBeNull();
+  });
+
+  it("ignores a capture whose content has since been superseded", async () => {
+    // Two quick saves start two captures, and they can finish in either order.
+    // The slower one must not mark its stale image as current — the card
+    // showing content that no longer exists is worse than showing none.
+    const { id, revision: firstSave } = await createDocument(db, ALICE, DOC);
+    await updateDocument(db, id, ALICE, { html: "<p>newer</p>", css: "" });
+
+    expect(await markThumbnail(db, id, ALICE, firstSave)).toBe(false);
+    expect((await loadDocument(db, id, ALICE))?.thumbnailUpdatedAt).toBeNull();
   });
 });
 

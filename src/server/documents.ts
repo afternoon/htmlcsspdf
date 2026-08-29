@@ -1,4 +1,4 @@
-import { sanitizeHtml } from "../sanitize.ts";
+import { sanitizeCss, sanitizeHtml } from "../sanitize.ts";
 
 /**
  * Document storage.
@@ -22,6 +22,8 @@ export interface DocumentRecord {
   css: string;
   /** Epoch ms of the last successful thumbnail capture; null if there is none. */
   thumbnailUpdatedAt: number | null;
+  /** Bumped on every content write, so one save can be told from another. */
+  revision: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -55,24 +57,33 @@ const DEFAULT_NAME = "Untitled document";
  * and fall back when nothing usable remains.
  */
 export function normalizeName(name: string): string {
-  const collapsed = name.replace(/\s+/g, " ").trim();
+  // Control and format characters go first. They are not cosmetic: a name is
+  // shown on its card and inside the delete confirmation, and U+202E
+  // (right-to-left override) makes a name render as something other than what
+  // it is — the classic filename-spoofing trick, here aimed at a destructive
+  // action. Zero-width characters give a name that looks blank but is not,
+  // which is also why this runs before the empty check.
+  const stripped = name.replace(/[\p{Cc}\p{Cf}]/gu, "");
+  const collapsed = stripped.replace(/\s+/gu, " ").trim();
   if (!collapsed) return DEFAULT_NAME;
-  return collapsed.slice(0, MAX_NAME_LENGTH);
+  // Truncate by code point, so a name ending in an emoji cannot be cut through
+  // the middle of a surrogate pair and stored as broken text.
+  return [...collapsed].slice(0, MAX_NAME_LENGTH).join("");
 }
 
 export async function createDocument(
   db: D1Database,
   userId: string,
   input: NewDocument,
-): Promise<{ id: string }> {
+): Promise<{ id: string; revision: number }> {
   const id = crypto.randomUUID();
   const now = Date.now();
 
   await db
     .prepare(
       `insert into "document"
-         ("id","userId","name","html","css","thumbnailUpdatedAt","createdAt","updatedAt")
-       values (?, ?, ?, ?, ?, null, ?, ?)`,
+         ("id","userId","name","html","css","thumbnailUpdatedAt","createdAt","updatedAt","revision")
+       values (?, ?, ?, ?, ?, null, ?, ?, 1)`,
     )
     // Sanitised on the way in, so nothing executable is ever at rest — even if
     // a future caller forgets. The editor's own check is only advisory.
@@ -87,7 +98,9 @@ export async function createDocument(
     )
     .run();
 
-  return { id };
+  // The caller needs the revision so a later thumbnail capture can prove the
+  // content it rendered is still the content stored here.
+  return { id, revision: 1 };
 }
 
 /** The document, or null when it does not exist *or* belongs to someone else. */
@@ -123,19 +136,21 @@ export async function updateDocument(
   id: string,
   userId: string,
   content: DocumentContent,
-): Promise<boolean> {
+): Promise<{ revision: number } | null> {
   const result = await db
     .prepare(
       // The thumbnail is cleared because it depicts content that no longer
       // exists. A card showing a stale preview is worse than one showing none.
       `update "document"
-         set "html" = ?, "css" = ?, "updatedAt" = ?, "thumbnailUpdatedAt" = null
-       where "id" = ? and "userId" = ?`,
+         set "html" = ?, "css" = ?, "updatedAt" = ?, "revision" = "revision" + 1,
+             "thumbnailUpdatedAt" = null
+       where "id" = ? and "userId" = ?
+       returning "revision"`,
     )
-    .bind(sanitizeHtml(content.html), content.css, Date.now(), id, userId)
-    .run();
+    .bind(sanitizeHtml(content.html), sanitizeCss(content.css), Date.now(), id, userId)
+    .first<{ revision: number }>();
 
-  return (result.meta.changes ?? 0) > 0;
+  return result ?? null;
 }
 
 export async function renameDocument(
@@ -168,22 +183,35 @@ export async function deleteDocument(
 }
 
 /**
- * Record that a thumbnail has been captured.
+ * Record that a thumbnail has been captured, if it still depicts the document.
  *
- * Kept separate from `updateDocument` because thumbnail capture happens after
- * the save has already been acknowledged: a failed or rate-limited capture
- * must never turn a successful save into a failure.
+ * Kept separate from `updateDocument` because capture happens after the save
+ * has been acknowledged: a failed or rate-limited capture must never turn a
+ * successful save into a failure.
+ *
+ * Conditional on `revision` because captures race. Two quick saves start two
+ * captures, and they can finish in either order — without this check the slower
+ * one marks its now-superseded image as current, leaving the card showing
+ * content that no longer exists until some later save happens to succeed. A
+ * capture that loses the race simply marks nothing, and the card falls back to
+ * "no preview", which is the honest answer.
+ *
+ * Keyed on the revision counter rather than `updatedAt`: Date.now() has
+ * millisecond resolution, and two saves in the same millisecond would compare
+ * equal, which is exactly the case this guards.
  */
 export async function markThumbnail(
   db: D1Database,
   id: string,
   userId: string,
+  contentRevision: number,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `update "document" set "thumbnailUpdatedAt" = ? where "id" = ? and "userId" = ?`,
+      `update "document" set "thumbnailUpdatedAt" = ?
+       where "id" = ? and "userId" = ? and "revision" = ?`,
     )
-    .bind(Date.now(), id, userId)
+    .bind(Date.now(), id, userId, contentRevision)
     .run();
 
   return (result.meta.changes ?? 0) > 0;

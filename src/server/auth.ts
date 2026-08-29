@@ -17,6 +17,9 @@ export function createAuth(env: Env) {
     // Explicit, because a wrong value here surfaces as an OAuth redirect_uri
     // mismatch from Google rather than as an error from us.
     baseURL: env.BETTER_AUTH_URL,
+    // Defaults to baseURL, so this changes nothing today — it states the CSRF
+    // boundary rather than leaving it implicit in another setting.
+    trustedOrigins: [env.BETTER_AUTH_URL],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,

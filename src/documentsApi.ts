@@ -19,16 +19,30 @@ export const DocumentNameSchema = z
   .min(1, "Give the document a name.")
   .max(MAX_NAME_LENGTH, `Keep the name under ${MAX_NAME_LENGTH} characters.`);
 
+/**
+ * Largest accepted HTML or CSS pane.
+ *
+ * Matches the render endpoint's own limit, so a document can never be saved
+ * that is too large to turn into a PDF. It also bounds the sanitiser's work:
+ * parsing is superlinear on pathological input, and an uncapped body was a
+ * denial-of-service vector as well as an unrenderable document.
+ */
+export const MAX_CONTENT_BYTES = 2_000_000;
+
+const DocumentBody = z
+  .string()
+  .max(MAX_CONTENT_BYTES, "Document is too large — keep HTML and CSS under 2 MB each.");
+
 export const SaveDocumentSchema = z.object({
   name: DocumentNameSchema,
-  html: z.string(),
-  css: z.string(),
+  html: DocumentBody,
+  css: DocumentBody,
 });
 export type SaveDocumentInput = z.infer<typeof SaveDocumentSchema>;
 
 export const UpdateDocumentSchema = z.object({
-  html: z.string(),
-  css: z.string(),
+  html: DocumentBody,
+  css: DocumentBody,
 });
 
 export const RenameDocumentSchema = z.object({ name: DocumentNameSchema });
@@ -122,8 +136,13 @@ export async function deleteDocument(id: string): Promise<void> {
   await request(`/api/documents/${id}`, { method: "DELETE" });
 }
 
-/** Where a document's thumbnail is served from; always through the worker. */
-export function thumbnailUrl(id: string, updatedAt: number | null): string {
-  // The timestamp busts the browser cache when a save produces a new capture.
-  return `/api/documents/${id}/thumbnail?v=${updatedAt ?? 0}`;
+/**
+ * Where a document's thumbnail is served from; always through the worker.
+ *
+ * Takes the capture timestamp rather than allowing null: callers only render an
+ * image once one exists, and the version parameter is what makes the response
+ * safe to cache immutably.
+ */
+export function thumbnailUrl(id: string, capturedAt: number): string {
+  return `/api/documents/${id}/thumbnail?v=${capturedAt}`;
 }

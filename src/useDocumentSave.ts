@@ -24,6 +24,8 @@ interface UseDocumentSave {
   nameOpen: boolean;
   state: SaveState;
   error: string | null;
+  /** The state to show for `doc`, which reverts to idle once it is edited. */
+  stateFor: (doc: Doc) => SaveState;
   requestSave: (doc: Doc) => void;
   confirmName: (name: string, doc: Doc) => Promise<void>;
   closeSignIn: () => void;
@@ -41,25 +43,47 @@ export function useDocumentSave(
   const [nameOpen, setNameOpen] = useState(false);
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
+  // What was last written, so "Saved" can be checked against the editor rather
+  // than latched. Without this the button read "Saved" forever — including
+  // over a hundred lines of new, unsaved work.
+  const [savedContent, setSavedContent] = useState<Doc | null>(null);
+
+  /**
+   * Whether `doc` is what we last saved.
+   *
+   * Compared by content rather than tracked with a dirty flag: an edit that
+   * happens to restore the saved text really is saved, and undo makes that
+   * ordinary rather than exotic.
+   */
+  function stateFor(doc: Doc): SaveState {
+    if (state !== "saved") return state;
+    if (!savedContent) return "idle";
+    const unchanged = savedContent.html === doc.html && savedContent.css === doc.css;
+    return unchanged ? "saved" : "idle";
+  }
 
   /**
    * Resume a save the user started before being sent to sign in.
    *
-   * Deferred until the session resolves, rather than read during the first
+   * Deferred until there is a session, rather than read during the first
    * render: the flag only means "finish the save", and finishing it requires
-   * knowing sign-in actually succeeded. Reading it too early opened the naming
-   * dialog for people who were still signed out — and, before the flag gained
-   * an expiry, for people who had abandoned a sign-in days earlier.
+   * knowing sign-in actually succeeded.
    *
-   * Runs once either way, since `takePendingSave` clears as it reads.
+   * Latching on `!isPending` alone was not enough. better-auth commonly
+   * reports "settled, no user" before the cookie-backed refetch lands, so the
+   * guard would consume the one-shot flag on that inconclusive read and never
+   * run again when the user actually arrived — the dialog simply never opened
+   * after signing in, which is the whole feature. Waiting for a session means
+   * a genuinely signed-out user leaves the flag alone, and its expiry retires
+   * it instead.
    */
   const resumed = useRef(false);
   useEffect(() => {
-    if (resumed.current || isPending) return;
+    if (resumed.current || isPending || !session) return;
     resumed.current = true;
 
     // A document that already has a name needs no naming dialog.
-    if (takePendingSave() && session && !initialDocumentId) setNameOpen(true);
+    if (takePendingSave() && !initialDocumentId) setNameOpen(true);
   }, [isPending, session, initialDocumentId]);
 
   function requestSave(doc: Doc) {
@@ -87,6 +111,7 @@ export function useDocumentSave(
     setError(null);
     try {
       await api.saveDocument(id, doc.html, doc.css);
+      setSavedContent(doc);
       setState("saved");
     } catch (e) {
       setState("error");
@@ -100,6 +125,7 @@ export function useDocumentSave(
     try {
       const id = await api.createDocument({ name, html: doc.html, css: doc.css });
       setDocumentId(id);
+      setSavedContent(doc);
       setNameOpen(false);
       setState("saved");
       // The draft has become a document, so it is no longer a draft.
@@ -113,6 +139,7 @@ export function useDocumentSave(
 
   return {
     documentId,
+    stateFor,
     signInOpen,
     nameOpen,
     state,

@@ -86,7 +86,11 @@ export function takePendingSave(now: number = Date.now()): boolean {
 
     const markedAt = Number(raw);
     if (!Number.isFinite(markedAt)) return false;
-    return now - markedAt < PENDING_SAVE_TTL_MS;
+    // Bounded at both ends: a timestamp in the future — from a skewed clock or
+    // a hand-edited value, which this module already assumes is possible —
+    // would otherwise never expire.
+    const age = now - markedAt;
+    return age >= 0 && age < PENDING_SAVE_TTL_MS;
   } catch {
     return false;
   }

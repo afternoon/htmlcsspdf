@@ -1,6 +1,6 @@
 import type { ActiveSession, Browser, BrowserWorker, Page } from "@cloudflare/puppeteer";
 import puppeteer from "@cloudflare/puppeteer";
-import { sanitizeHtml } from "../sanitize.ts";
+import { sanitizeCss, sanitizeHtml } from "../sanitize.ts";
 
 /**
  * Browser Run access: acquiring a session, and running one page in isolation.
@@ -50,9 +50,11 @@ export function buildDocument(html: string, css: string): string {
   // unsaved content straight from the editor. The server never trusts the
   // client's own check.
   const safeHtml = sanitizeHtml(html);
-  // The user's HTML may or may not be a full document. If it already has a
-  // <head>, inject the stylesheet there; otherwise wrap it in a minimal shell.
-  const style = `<style>\n${css}\n</style>`;
+  // CSS is sanitised too, and for a sharper reason than the HTML: it is
+  // interpolated into a <style> element, so a `</style>` in it would end that
+  // element and hand everything after it to the HTML parser — bypassing the
+  // allowlist entirely.
+  const style = `<style>\n${sanitizeCss(css)}\n</style>`;
   if (/<head[\s>]/i.test(safeHtml)) {
     return safeHtml.replace(/(<head[^>]*>)/i, `$1\n${style}\n`);
   }

@@ -1,9 +1,9 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
 import { UpdateDocumentSchema } from "../documentsApi.ts";
 import { deleteDocument, loadDocument, updateDocument } from "../server/documents.ts";
 import { jsonError, withUser } from "../server/session.ts";
-import { captureThumbnail } from "../server/thumbnails.ts";
+import { captureThumbnail, thumbnailKey } from "../server/thumbnails.ts";
 
 /**
  * A single document.
@@ -33,7 +33,17 @@ export const Route = createFileRoute("/api/documents/$id")({
           const saved = await updateDocument(env.DB, params.id, user.id, parsed.data);
           if (!saved) return jsonError(404, "Document not found.");
 
-          await captureThumbnail(params.id, user.id, parsed.data.html, parsed.data.css);
+          // See the note in api.documents.ts: waitUntil keeps the capture alive
+          // past the response instead of making the user wait for it.
+          waitUntil(
+            captureThumbnail(
+              params.id,
+              user.id,
+              parsed.data.html,
+              parsed.data.css,
+              saved.revision,
+            ),
+          );
 
           return new Response(null, { status: 204 });
         }),
@@ -42,6 +52,12 @@ export const Route = createFileRoute("/api/documents/$id")({
         withUser(request, async (user) => {
           const deleted = await deleteDocument(env.DB, params.id, user.id);
           if (!deleted) return jsonError(404, "Document not found.");
+
+          // The rendered image of a deleted document must go too: it is the
+          // user's content, and nothing could ever reach it again to reclaim
+          // it. Best-effort, so a failing bucket cannot block the delete.
+          await env.THUMBNAILS.delete(thumbnailKey(params.id)).catch(() => {});
+
           return new Response(null, { status: 204 });
         }),
     },

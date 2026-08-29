@@ -1,5 +1,6 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as api from "./documentsApi.ts";
 import { markPendingSave, takePendingSave } from "./draft.ts";
 import { useDocumentSave } from "./useDocumentSave.ts";
 
@@ -54,6 +55,25 @@ describe("resuming a save interrupted by signing in", () => {
     await waitFor(() => expect(result.current.nameOpen).toBe(true));
   });
 
+  it("still resumes when the session reports signed-out before the user arrives", async () => {
+    // better-auth commonly settles to "not pending, no user" before its
+    // cookie-backed refetch lands. Consuming the one-shot flag on that
+    // inconclusive read meant the dialog never opened after signing in.
+    markPendingSave();
+    stillResolving();
+
+    const { result, rerender } = renderHook(() => useDocumentSave(null));
+
+    session.current = { data: null, isPending: false };
+    rerender();
+    expect(result.current.nameOpen).toBe(false);
+
+    signedIn();
+    rerender();
+
+    await waitFor(() => expect(result.current.nameOpen).toBe(true));
+  });
+
   it("does not open the dialog for a user who is still signed out", async () => {
     // Sign-in was abandoned or failed. Prompting for a name would lead
     // straight to a save that cannot succeed.
@@ -62,8 +82,10 @@ describe("resuming a save interrupted by signing in", () => {
 
     const { result } = renderHook(() => useDocumentSave(null));
 
-    await waitFor(() => expect(takePendingSave()).toBe(false));
     expect(result.current.nameOpen).toBe(false);
+    // The flag survives rather than being burned on an inconclusive read; its
+    // expiry retires it if the user never comes back.
+    expect(takePendingSave()).toBe(true);
   });
 
   it("does not open the dialog over an already-named document", async () => {
@@ -94,5 +116,52 @@ describe("resuming a save interrupted by signing in", () => {
 
     await waitFor(() => expect(takePendingSave()).toBe(false));
     expect(result.current.nameOpen).toBe(false);
+  });
+});
+
+describe("what the Save button reports", () => {
+  const DOC = { html: "<h1>Hi</h1>", css: "h1 { color: red }" };
+
+  it("says saved only while the content still matches what was written", async () => {
+    // The button previously latched on "Saved" forever, so a user could type a
+    // hundred lines of new work and still be told it was saved.
+    vi.spyOn(api, "saveDocument").mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useDocumentSave("doc-1"));
+
+    await act(async () => {
+      result.current.requestSave(DOC);
+    });
+    await waitFor(() => expect(result.current.stateFor(DOC)).toBe("saved"));
+
+    const edited = { ...DOC, html: "<h1>Changed</h1>" };
+    expect(result.current.stateFor(edited)).toBe("idle");
+  });
+
+  it("says saved again if an edit is undone back to the saved text", async () => {
+    vi.spyOn(api, "saveDocument").mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useDocumentSave("doc-1"));
+
+    await act(async () => {
+      result.current.requestSave(DOC);
+    });
+    await waitFor(() => expect(result.current.stateFor(DOC)).toBe("saved"));
+
+    expect(result.current.stateFor({ ...DOC, css: "changed" })).toBe("idle");
+    expect(result.current.stateFor(DOC)).toBe("saved");
+  });
+
+  it("reports a failed save regardless of the content shown", async () => {
+    vi.spyOn(api, "saveDocument").mockRejectedValue(new Error("network down"));
+
+    const { result } = renderHook(() => useDocumentSave("doc-1"));
+
+    await act(async () => {
+      result.current.requestSave(DOC);
+    });
+
+    await waitFor(() => expect(result.current.stateFor(DOC)).toBe("error"));
+    expect(result.current.error).toBe("network down");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findDisallowedMarkup, sanitizeHtml } from "./sanitize.ts";
+import { findDisallowedMarkup, sanitizeCss, sanitizeHtml } from "./sanitize.ts";
 
 /**
  * The sanitiser is the security boundary for stored documents: its output is
@@ -309,5 +309,140 @@ describe("findDisallowedMarkup", () => {
       "<script>a</script><script>b</script><iframe></iframe>",
     );
     expect(issues).toHaveLength(3);
+  });
+});
+
+describe("sanitizeCss", () => {
+  /**
+   * CSS reaches the browser inside a <style> element, so anything that can
+   * close that element escapes into HTML context — bypassing the HTML
+   * allowlist entirely. That was a live vulnerability: `</style><script>` in
+   * the CSS pane produced a real script element in the rendered document.
+   */
+  describe("style element breakout", () => {
+    it("neutralises a closing style tag", () => {
+      const clean = sanitizeCss("body{}</style><script>alert(1)</script><style>");
+      expect(clean).not.toMatch(/<\/style/i);
+    });
+
+    it("neutralises it whatever the case or spacing", () => {
+      for (const closer of [
+        "</style>",
+        "</STYLE>",
+        "</StYlE>",
+        "</style >",
+        "</style\t>",
+      ]) {
+        expect(sanitizeCss(`body{}${closer}<script>x</script>`), closer).not.toMatch(
+          /<\/\s*style/i,
+        );
+      }
+    });
+
+    it("leaves the document with no script element after a breakout attempt", async () => {
+      const { parse } = await import("parse5");
+      const css = sanitizeCss("body{}</style><script>alert(1)</script><style>");
+      const doc = parse(
+        `<!doctype html><html><head><style>${css}</style></head><body></body></html>`,
+      );
+
+      const tags: string[] = [];
+      const walk = (n: { tagName?: string; childNodes?: unknown[] }) => {
+        if (n.tagName) tags.push(n.tagName);
+        for (const c of (n.childNodes ?? []) as (typeof n)[]) walk(c);
+      };
+      walk(doc as never);
+
+      expect(tags).not.toContain("script");
+    });
+
+    it("blocks the vectors that work even with JavaScript disabled", async () => {
+      const { parse } = await import("parse5");
+      for (const payload of [
+        'body{}</style><meta http-equiv="refresh" content="0;url=http://evil.test">',
+        "body{}</style><iframe src=http://169.254.169.254/></iframe>",
+        'body{}</style><base href="http://evil.test/">',
+      ]) {
+        const css = sanitizeCss(payload);
+        const doc = parse(`<html><head><style>${css}</style></head><body></body></html>`);
+        const tags: string[] = [];
+        const walk = (n: { tagName?: string; childNodes?: unknown[] }) => {
+          if (n.tagName) tags.push(n.tagName);
+          for (const c of (n.childNodes ?? []) as (typeof n)[]) walk(c);
+        };
+        walk(doc as never);
+
+        expect(
+          tags.filter((t) => ["iframe", "base"].includes(t)),
+          payload,
+        ).toEqual([]);
+        // The only <meta> permitted is the charset our own shell adds.
+        expect(tags.filter((t) => t === "meta").length, payload).toBe(0);
+      }
+    });
+  });
+
+  describe("legitimate stylesheets", () => {
+    it("leaves ordinary CSS untouched", () => {
+      const css =
+        "@page { size: A4; margin: 20mm }\nbody { font-family: Georgia, serif }";
+      expect(sanitizeCss(css)).toBe(css);
+    });
+
+    it("keeps remote fonts and images, which are deliberately allowed", () => {
+      const css =
+        "@import url('https://fonts.example.com/x.css');\n" +
+        "body { background: url(https://cdn.example.com/bg.png) }";
+      expect(sanitizeCss(css)).toBe(css);
+    });
+
+    it("keeps comparison operators and arbitrary content strings", () => {
+      // `<` is legal in CSS: media queries use it, and content strings may
+      // hold anything. Only the style-closing sequence may be touched.
+      const css = "@media (width < 40rem) { .a { content: '<b>not markup</b>' } }";
+      expect(sanitizeCss(css)).toBe(css);
+    });
+
+    it("returns empty input unchanged", () => {
+      expect(sanitizeCss("")).toBe("");
+    });
+
+    it("is idempotent", () => {
+      const once = sanitizeCss("body{}</style><script>x</script>");
+      expect(sanitizeCss(once)).toBe(once);
+    });
+  });
+});
+
+describe("pathological input", () => {
+  /**
+   * Both tree walkers recurse over document depth. A deeply nested document is
+   * cheap to send and blew the stack, throwing RangeError out of the save
+   * handler as an unhandled 500 — and out of the editor's advisory check as a
+   * React crash. Workers has a smaller stack than Node, so the ceiling there
+   * is lower than any threshold measured locally.
+   */
+  const deep = (depth: number) => "<div>".repeat(depth) + "x";
+
+  it("survives a document nested far past anything legitimate", () => {
+    // 20k deep overflowed the stack before the depth limit; the API also caps
+    // content size, so nothing larger than this reaches the parser at all.
+    expect(() => sanitizeHtml(deep(20_000))).not.toThrow();
+  });
+
+  it("reports rather than throwing on the same input", () => {
+    expect(() => findDisallowedMarkup(deep(20_000))).not.toThrow();
+  });
+
+  it("keeps content that sits within the depth limit", () => {
+    const clean = sanitizeHtml("<div><div><div><p>deep enough</p></div></div></div>");
+    expect(clean).toContain("deep enough");
+  });
+
+  it("drops content nested past the limit rather than failing the whole document", () => {
+    // A legitimate print document is never hundreds of levels deep, so
+    // truncating beyond the limit costs nothing real and keeps the rest.
+    const clean = sanitizeHtml(`<p>kept</p>${deep(5_000)}`);
+    expect(clean).toContain("kept");
   });
 });

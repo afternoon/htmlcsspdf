@@ -139,7 +139,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
         formatting={formatting}
         rendering={rendering}
         canDownload={pdfUrl !== null}
-        saveState={save.state}
+        saveState={save.stateFor({ html, css })}
         documentName={documentName}
       />
 
