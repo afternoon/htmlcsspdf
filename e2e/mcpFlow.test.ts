@@ -151,8 +151,11 @@ describe("an agent that goes through the whole flow", () => {
       name: "create_document",
       arguments: DOC,
     });
-    const { id } = JSON.parse(resultText(created)) as { id: string };
+    const { id, url } = JSON.parse(resultText(created)) as { id: string; url: string };
     expect(id).toBeTruthy();
+    // The URL an agent would hand its user, against the origin the app is
+    // really served from rather than the one a unit test hands it.
+    expect(url).toBe(`${baseUrl}/d/${id}`);
 
     const read = await agent.client.callTool({
       name: "get_document",
@@ -161,6 +164,7 @@ describe("an agent that goes through the whole flow", () => {
     expect(JSON.parse(resultText(read))).toMatchObject({
       name: DOC.name,
       html: DOC.html,
+      url: `${baseUrl}/d/${id}`,
     });
 
     const listed = await agent.client.callTool({
@@ -168,9 +172,12 @@ describe("an agent that goes through the whole flow", () => {
       arguments: {},
     });
     const { documents } = JSON.parse(resultText(listed)) as {
-      documents: { id: string }[];
+      documents: { id: string; url: string }[];
     };
     expect(documents.map((document) => document.id)).toContain(id);
+    expect(documents.find((document) => document.id === id)?.url).toBe(
+      `${baseUrl}/d/${id}`,
+    );
   });
 
   it("has its HTML sanitised on the way in, like the browser's", async () => {

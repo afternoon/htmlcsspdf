@@ -1,3 +1,5 @@
+import { appOrigin } from "./appUrl.ts";
+
 /**
  * The MCP server's identity as an OAuth protected resource.
  *
@@ -42,5 +44,5 @@ export const MCP_SCOPES = [
  * is what makes `http://localhost:5173/api/mcp` work in development.
  */
 export function mcpResource(env: Env): string {
-  return `${env.BETTER_AUTH_URL.replace(/\/$/, "")}${MCP_PATH}`;
+  return `${appOrigin(env)}${MCP_PATH}`;
 }

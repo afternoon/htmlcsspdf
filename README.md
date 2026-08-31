@@ -136,8 +136,9 @@ assets and dispatches server routes.
 - `src/routes/docs.tsx` — `/docs`, the document list.
 - `src/server/` — server-only modules: `auth.ts`, `documents.ts` (D1 queries),
   `render.ts` (Browser Run), `thumbnails.ts`, `session.ts`, `loaderData.ts`,
-  `mcpServer.ts` (the MCP tools), `authPlugins.ts`, `discovery.ts`,
-  `nativeClientRegistration.ts`, `mcpFailure.ts`.
+  `mcpServer.ts` (the MCP tools), `appUrl.ts` (links back into the app),
+  `authPlugins.ts`, `discovery.ts`, `nativeClientRegistration.ts`,
+  `mcpFailure.ts`.
 - `src/sanitize.ts` — the HTML allowlist. Runs on the client for feedback and
   on the server as the actual boundary.
 - `src/App.tsx` — three-pane UI, render lifecycle, draft persistence, error
@@ -168,6 +169,17 @@ Six tools, each a thin call into `src/server/documents.ts`: `list_documents`,
 `delete_document`. Agents get exactly what the browser gets — the same
 ownership clause in every query, the same sanitiser on every write, the same
 404 for somebody else's document.
+
+Every result that names a document carries its `url` alongside its `id`:
+`create_document` hands back the link to what it has just written,
+`get_document` returns it, and `list_documents` carries one per entry. An agent
+is usually about to tell a person where the document is, and a link it composed
+itself from an id is a link it guessed. It is a field rather than a seventh
+tool, so it costs no extra round trip and an agent cannot end up holding an id
+without the URL for it. The URL is built in `src/server/appUrl.ts` from
+`BETTER_AUTH_URL` — the same origin the OAuth issuer and the MCP resource
+identifier come from — and not from the request's own `Host`, which is whatever
+hostname the call happened to arrive at rather than the one a person can open.
 
 Rendering is deliberately **not** a tool. Browser Run is 10 browser-minutes a
 day on the free plan, and an agent would spend that far faster than a person
