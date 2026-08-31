@@ -23,8 +23,19 @@ import { buildMcpServer } from "../server/mcpServer.ts";
  *
  * Only POST is exposed. The 2026-07-28 protocol handles each request
  * independently, so there is no session to open with GET or tear down with
- * DELETE, and `legacy: "reject"` turns away 2025-era clients rather than
- * quietly serving them through a second code path.
+ * DELETE.
+ *
+ * `legacy: "stateless"` serves 2025-era clients as well. This endpoint was
+ * modern-only for a while, on the reasoning that one era means one code path;
+ * what changed is evidence rather than taste. A client that negotiates the
+ * 2026-07-28 era is served it — the SDK's own probe decides, per request — and
+ * a client that never negotiates was, until now, unable to connect at all
+ * rather than being served the same six tools a revision behind. The legacy
+ * leg is the SDK's own stateless fallback over this same `buildMcpServer`
+ * factory, so the two eras cannot drift apart, and it costs a `405` on GET and
+ * DELETE, which nothing here ever used. `e2e/mcpFlow.test.ts` pins both eras;
+ * when every client negotiates, deleting this option is a one-line change with
+ * a test to say whether it is safe yet.
  */
 export const Route = createFileRoute("/api/mcp")({
   server: {
@@ -50,7 +61,7 @@ export const Route = createFileRoute("/api/mcp")({
                     userId: String(claims.sub),
                     scopes: grantedScopes(claims.scope),
                   }),
-                { legacy: "reject" },
+                { legacy: "stateless" },
               );
 
               return await handler.fetch(authorizedRequest);

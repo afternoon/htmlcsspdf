@@ -318,18 +318,62 @@ describe("a client running on somebody's machine can register itself", () => {
   }, 60_000);
 });
 
-describe("the endpoint serves one protocol revision", () => {
-  it("turns away a 2025-era client rather than serving it", async () => {
-    // `legacy: "reject"` in `api.mcp.ts`. Worth pinning because it has a real
-    // cost: the MCP client SDK negotiates the 2025 handshake *by default*, so
-    // an agent that has not opted into modern negotiation cannot connect at
-    // all. If that trade is ever revisited, this test is where the decision
-    // is written down.
+describe("the endpoint serves both protocol revisions", () => {
+  /**
+   * Both eras, because an endpoint that serves only one turns clients away.
+   *
+   * This was modern-only until a real client could not connect: `claude mcp
+   * list` never negotiates, so it opened the plain 2025 handshake and was
+   * refused with `-32022` before a tool was ever listed. The legacy leg is the
+   * SDK's own stateless fallback over the same `buildMcpServer` factory, so
+   * what a 2025-era client gets is what a 2026-era one gets, a revision
+   * behind — and the day every client negotiates, the option comes out and
+   * the first of these two tests is what says whether that is safe.
+   */
+  it("serves a client that pins 2026-07-28", async () => {
+    const agent = await connectAgent({ baseUrl, cookie: alice.cookie });
+
+    try {
+      const { tools } = await agent.client.listTools();
+      expect(tools.map((tool) => tool.name)).toContain("create_document");
+    } finally {
+      await agent.close();
+    }
+  }, 60_000);
+
+  it("serves a client that never negotiates", async () => {
+    const agent = await connectAgent({ baseUrl, cookie: alice.cookie, era: "legacy" });
+
+    try {
+      // Not merely connected: the same six tools, and a write that lands.
+      const { tools } = await agent.client.listTools();
+      expect(tools.map((tool) => tool.name).sort()).toEqual([
+        "create_document",
+        "delete_document",
+        "get_document",
+        "list_documents",
+        "rename_document",
+        "update_document",
+      ]);
+
+      const created = await agent.client.callTool({
+        name: "create_document",
+        arguments: { ...DOC, name: "Written by a 2025-era client" },
+      });
+      expect(isError(created)).toBe(false);
+      expect(resultText(created)).toContain("id");
+    } finally {
+      await agent.close();
+    }
+  }, 60_000);
+
+  it("still refuses a revision it does not serve", async () => {
+    // Serving 2025 is not serving anything asked for: an unknown revision is
+    // still answered with the supported list rather than a best guess.
     const response = await fetch(`${baseUrl}/api/mcp`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        // A token is not needed: the version check answers before authorization.
         accept: "application/json, text/event-stream",
       },
       body: JSON.stringify({
@@ -337,15 +381,15 @@ describe("the endpoint serves one protocol revision", () => {
         id: 1,
         method: "initialize",
         params: {
-          protocolVersion: "2025-11-25",
+          protocolVersion: "2019-01-01",
           capabilities: {},
-          clientInfo: { name: "legacy", version: "0" },
+          clientInfo: { name: "ancient", version: "0" },
         },
       }),
     });
 
-    // Unauthenticated, so the challenge comes first; what matters is that no
-    // 2025 exchange is ever served.
+    // Unauthenticated, so the challenge may come first; either way it is not
+    // served.
     expect([400, 401]).toContain(response.status);
   });
 });
