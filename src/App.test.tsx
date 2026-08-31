@@ -396,17 +396,4 @@ describe("dropping files onto the editor", () => {
       screen.queryByRole("button", { name: "Dismiss message" }),
     ).not.toBeInTheDocument();
   });
-
-  it("offers a keyboard path to the same thing", async () => {
-    const user = userEvent.setup();
-    await renderApp(<App />);
-    // react-dropzone opens the picker by clicking its hidden input; the dialog
-    // itself is the browser's, so this is as far as a test can follow.
-    const openPicker = vi.spyOn(HTMLInputElement.prototype, "click");
-
-    screen.getByRole("button", { name: /open files/i }).focus();
-    await user.keyboard("{Enter}");
-
-    expect(openPicker).toHaveBeenCalled();
-  });
 });

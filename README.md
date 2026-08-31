@@ -162,10 +162,9 @@ never be collapsed shut. The split is remembered in localStorage.
 ## Dropping files
 
 Both pages take dropped files, and the whole window is the target — the header,
-the gap between panes and the preview all accept a drop. **Open files** in the
-editor header and **New from files** on the document list reach the same thing
-from the keyboard, since a drag is a pointer gesture with no keyboard
-equivalent.
+the gap between panes and the preview all accept a drop. **New from files** on
+the document list reaches the same thing through the file picker, since a drag
+is a pointer gesture with no keyboard equivalent.
 
 - In the editor, an HTML file replaces the HTML pane and a stylesheet replaces
   the CSS pane. Dropping one of each fills both; the pane no file speaks for is

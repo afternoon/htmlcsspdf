@@ -155,7 +155,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
             formatting={autoFormat.formatting}
             onSave={handleSave}
             saveState={save.stateFor({ html, css })}
-            onOpenFiles={drop.open}
           />
         }
       >
