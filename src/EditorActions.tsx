@@ -1,3 +1,4 @@
+import { FilePlus2 } from "lucide-react";
 import type { SaveState } from "./useDocumentSave.ts";
 
 interface EditorActionsProps {
@@ -6,6 +7,8 @@ interface EditorActionsProps {
   formatting: boolean;
   onSave: () => void;
   saveState: SaveState;
+  /** Opens the file picker — the keyboard path to what a drop does. */
+  onOpenFiles: () => void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -28,9 +31,17 @@ export function EditorActions({
   formatting,
   onSave,
   saveState,
+  onOpenFiles,
 }: EditorActionsProps) {
   return (
     <>
+      {/* Files can be dropped anywhere on the page, but a drag is a pointer
+          gesture with no keyboard equivalent. This is that equivalent. */}
+      <button type="button" data-variant="ghost" onClick={onOpenFiles}>
+        <FilePlus2 size={14} aria-hidden="true" />
+        Open files
+      </button>
+
       <label className="toggle">
         <input
           type="checkbox"

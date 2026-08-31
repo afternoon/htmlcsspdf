@@ -6,6 +6,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentsPage } from "./DocumentsPage.tsx";
 import type { DocumentSummary } from "./documentsApi.ts";
@@ -64,10 +65,30 @@ function createdDocument(fetchMock: ReturnType<typeof stubApi>) {
   return JSON.parse(String(call?.[1]?.body));
 }
 
+/**
+ * Drop files onto the page, the way a real drag does.
+ *
+ * jsdom implements neither `DragEvent` nor `DataTransfer`, so the event
+ * carries the shape react-dropzone reads: `types` marks a file drag and
+ * `items` is what it expands into files. Dispatched on a descendant so it
+ * bubbles to the drop target the way a real drop does.
+ */
 function dropFiles(files: File[], types: string[] = ["Files"]) {
   const event = new Event("drop", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "dataTransfer", { value: { types, files } });
-  window.dispatchEvent(event);
+  const fileDrag = types.includes("Files");
+  Object.defineProperty(event, "dataTransfer", {
+    value: {
+      types,
+      files: fileDrag ? files : [],
+      getData: () => "",
+      items: files.map((file) => ({
+        kind: fileDrag ? "file" : "string",
+        type: file.type,
+        getAsFile: () => file,
+      })),
+    },
+  });
+  screen.getByRole("main").dispatchEvent(event);
 }
 
 const htmlFile = (name = "invoice.html", content = "<p>hi</p>") =>
@@ -169,5 +190,19 @@ describe("dropping files onto the document list", () => {
         false,
       ),
     );
+  });
+
+  it("offers a keyboard path to the same thing", async () => {
+    const user = userEvent.setup();
+    stubApi(() => jsonResponse({ id: "abc" }));
+    await renderPage();
+    // react-dropzone opens the picker by clicking its hidden input; the dialog
+    // itself is the browser's, so this is as far as a test can follow.
+    const openPicker = vi.spyOn(HTMLInputElement.prototype, "click");
+
+    screen.getByRole("button", { name: /new from files/i }).focus();
+    await user.keyboard("{Enter}");
+
+    expect(openPicker).toHaveBeenCalled();
   });
 });

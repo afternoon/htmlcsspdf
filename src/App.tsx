@@ -16,6 +16,7 @@ import type { Doc } from "./storage.ts";
 import { Toast } from "./Toast.tsx";
 import { useAutoFormat } from "./useAutoFormat.ts";
 import { useDocumentSave } from "./useDocumentSave.ts";
+import { useFileDrop } from "./useFileDrop.ts";
 import { useLayout } from "./useLayout.ts";
 import { useRenderer } from "./useRenderer.ts";
 import { useToast } from "./useToast.ts";
@@ -50,6 +51,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   const { pdfUrl, error, rendering, render, clearError, isStale } = useRenderer();
   const save = useDocumentSave(documentId ?? null, documentName ?? null);
   const toast = useToast();
+  const drop = useFileDrop((files) => void handleDrop(files));
 
   const applyFormatted = useCallback((next: Doc) => {
     setHtml(next.html);
@@ -138,12 +140,8 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     );
 
   return (
-    <>
+    <DropZone drop={drop} hint="Drop HTML or CSS to replace the matching pane">
       <SignInDialog open={save.signInOpen} onClose={save.closeSignIn} />
-      <DropZone
-        onDrop={(files) => void handleDrop(files)}
-        hint="Drop HTML or CSS to replace the matching pane"
-      />
       <Toast toast={toast.toast} onDismiss={toast.dismiss} />
 
       <AppShell
@@ -157,6 +155,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
             formatting={autoFormat.formatting}
             onSave={handleSave}
             saveState={save.stateFor({ html, css })}
+            onOpenFiles={drop.open}
           />
         }
       >
@@ -215,6 +214,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
           />
         </main>
       </AppShell>
-    </>
+    </DropZone>
   );
 }

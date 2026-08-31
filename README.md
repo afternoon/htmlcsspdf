@@ -102,7 +102,8 @@ assets and dispatches server routes.
 - `src/Editor.tsx` — CodeMirror 6 wrapper.
 - `src/Divider.tsx` — draggable split handles.
 - `src/dropFiles.ts` — what a dropped file means; see Dropping files below.
-- `src/DropZone.tsx` — the window-wide file drop target and its overlay.
+- `src/useFileDrop.ts` — react-dropzone wiring: the page target and the picker.
+- `src/DropZone.tsx` — wraps the page in that target and shows the overlay.
 - `src/Toast.tsx` / `src/useToast.ts` — the one transient message a page shows.
 
 ## Documents and access control
@@ -161,7 +162,10 @@ never be collapsed shut. The split is remembered in localStorage.
 ## Dropping files
 
 Both pages take dropped files, and the whole window is the target — the header,
-the gap between panes and the preview all accept a drop.
+the gap between panes and the preview all accept a drop. **Open files** in the
+editor header and **New from files** on the document list reach the same thing
+from the keyboard, since a drag is a pointer gesture with no keyboard
+equivalent.
 
 - In the editor, an HTML file replaces the HTML pane and a stylesheet replaces
   the CSS pane. Dropping one of each fills both; the pane no file speaks for is
@@ -172,24 +176,38 @@ the gap between panes and the preview all accept a drop.
   nor CSS, and a file over the 2 MB document limit are all refused in a toast,
   and nothing is changed.
 
-The rules live in `src/dropFiles.ts` with no framework or DOM imports beyond the
-slice of `File` they read, so both pages decide identically.
+The split is deliberate. **react-dropzone** owns the drag plumbing — the
+enter/leave counting a naive boolean gets wrong, directory expansion, and the
+document-level guard that stops the browser navigating to a dropped file. What
+a drop *means* is decided by `src/dropFiles.ts`, a plain module with no
+framework or DOM imports beyond the slice of `File` it reads, so both pages
+answer identically and the messages stay ours rather than becoming generic
+rejection codes. `accept` is passed to `useDropzone` only to filter the
+picker's dialog; rejections are forwarded into the same rules, so dropping a
+PDF says so by name instead of being a silent non-event.
 
-Two things the drop zone has to do that are not obvious:
+Two things that are not obvious:
 
-- **File drags are claimed in the capture phase and stopped there.** CodeMirror
-  has a file drop handler of its own that reads the file and pastes its text at
-  the cursor. Left to run, a dropped stylesheet would both replace the CSS pane
-  and be pasted into whichever pane it landed on — and since its read is
-  asynchronous, the paste would land last and win.
-- **Only drags carrying files are claimed** (`dataTransfer.types` includes
-  `Files`). CodeMirror moves selected text by drag, and taking that drop would
-  break editing in the name of a feature about files.
+- **The editor declines file drops** (`declineFileDrops` in `src/Editor.tsx`).
+  CodeMirror reads a dropped file itself and pastes its text at the cursor.
+  Left enabled, a dropped stylesheet would both replace the CSS pane and be
+  pasted into whichever pane it landed on — and since its read is asynchronous,
+  the paste would land last and win. `EditorView.domEventHandlers` returning
+  true marks the event handled, which stops the built-in handler:
+  `computeHandlers` appends the built-in last and `runHandlers` breaks on the
+  first handler returning true. The event still bubbles, so the drop zone above
+  still receives it. Only file drags are declined — dragging selected text
+  within the editor stays CodeMirror's.
+- **The zone is a wrapper, not the window.** react-dropzone delivers through
+  the element its root props are on, so `.drop-root` fills the viewport and
+  `.app` sizes itself against it. `noClick` and `noKeyboard` are set, because a
+  click or Enter anywhere on a page-sized target would otherwise open a file
+  dialog.
 
-The extension is consulted only when the browser reports no MIME type at all,
-which happens for files dragged from places the platform has no mapping for. A
-type we recognise and do not accept is a rejection, not an invitation to guess
-from the name.
+The file extension is consulted only when the browser reports no MIME type at
+all, which happens for files dragged from places the platform has no mapping
+for. A type we recognise and do not accept is a rejection, not an invitation to
+guess from the name.
 
 ## Validation and formatting
 

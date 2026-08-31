@@ -235,19 +235,35 @@ describe("App", () => {
 });
 
 /**
- * Dispatch a file drop on the window, the way a real drag does.
+ * Drop files onto the page, the way a real drag does.
  *
  * jsdom implements neither `DragEvent` nor `DataTransfer`, so the event
- * carries the small shape the drop zone actually reads. `types` is what
- * distinguishes a file drag from CodeMirror moving selected text.
+ * carries the shape react-dropzone reads: `types` is what marks a file drag,
+ * and `items` is what it expands into files. Dispatched on a descendant so it
+ * bubbles to the drop target the way a real drop does.
  */
 function dropFiles(
   files: File[],
-  { types = ["Files"], target = window }: { types?: string[]; target?: EventTarget } = {},
+  { types = ["Files"], target }: { types?: string[]; target?: Element } = {},
 ) {
   const event = new Event("drop", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "dataTransfer", { value: { types, files } });
-  target.dispatchEvent(event);
+  // A real text drag carries string items, not file ones, and react-dropzone
+  // reads either — so the items have to follow `types`, or the fixture would
+  // describe a file drag whatever it claims to be.
+  const fileDrag = types.includes("Files");
+  Object.defineProperty(event, "dataTransfer", {
+    value: {
+      types,
+      files: fileDrag ? files : [],
+      getData: () => "",
+      items: files.map((file) => ({
+        kind: fileDrag ? "file" : "string",
+        type: file.type,
+        getAsFile: () => file,
+      })),
+    },
+  });
+  (target ?? screen.getByRole("textbox", { name: "HTML" })).dispatchEvent(event);
   return event;
 }
 
@@ -367,11 +383,30 @@ describe("dropping files onto the editor", () => {
   it("ignores a drag that carries no files", async () => {
     await renderApp(<App />);
     const html = screen.getByRole("textbox", { name: "HTML" });
-    const before = html.textContent;
+    const css = screen.getByRole("textbox", { name: "CSS" });
+    const before = { html: html.textContent, css: css.textContent };
 
-    const event = dropFiles([htmlFile()], { types: ["text/plain"] });
+    dropFiles([htmlFile()], { types: ["text/plain"] });
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(html.textContent).toBe(before);
+    // Long enough for the drop rules to have run and reported, had they.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(html.textContent).toBe(before.html);
+    expect(css.textContent).toBe(before.css);
+    expect(
+      screen.queryByRole("button", { name: "Dismiss message" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a keyboard path to the same thing", async () => {
+    const user = userEvent.setup();
+    await renderApp(<App />);
+    // react-dropzone opens the picker by clicking its hidden input; the dialog
+    // itself is the browser's, so this is as far as a test can follow.
+    const openPicker = vi.spyOn(HTMLInputElement.prototype, "click");
+
+    screen.getByRole("button", { name: /open files/i }).focus();
+    await user.keyboard("{Enter}");
+
+    expect(openPicker).toHaveBeenCalled();
   });
 });

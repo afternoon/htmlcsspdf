@@ -1,4 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router";
+import { FilePlus2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { AppShell } from "./AppShell.tsx";
 import { DocumentCard } from "./DocumentCard.tsx";
@@ -7,6 +8,7 @@ import type { DocumentSummary } from "./documentsApi.ts";
 import * as api from "./documentsApi.ts";
 import { readDrop } from "./dropFiles.ts";
 import { Toast } from "./Toast.tsx";
+import { useFileDrop } from "./useFileDrop.ts";
 import { useToast } from "./useToast.ts";
 
 /** The document list: header, a New document action, and a grid of cards. */
@@ -18,6 +20,7 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   // created, and two drops in one tick would both read a stale `useState`.
   const creating = useRef(false);
   const toast = useToast();
+  const drop = useFileDrop((files) => void handleDrop(files));
 
   async function handleRename(document: DocumentSummary, name: string) {
     setRenamingId(document.id);
@@ -81,20 +84,23 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   }
 
   return (
-    <>
-      <DropZone
-        onDrop={(files) => void handleDrop(files)}
-        hint="Drop HTML or CSS files to start a document"
-      />
+    <DropZone drop={drop} hint="Drop HTML or CSS files to start a document">
       <Toast toast={toast.toast} onDismiss={toast.dismiss} />
 
       <AppShell
         title={<span className="status">documents</span>}
         onSignIn={() => router.navigate({ to: "/" })}
         actions={
-          <Link to="/" className="button-link">
-            New document
-          </Link>
+          <>
+            {/* The keyboard path to what dropping files does. */}
+            <button type="button" data-variant="ghost" onClick={drop.open}>
+              <FilePlus2 size={14} aria-hidden="true" />
+              New from files
+            </button>
+            <Link to="/" className="button-link">
+              New document
+            </Link>
+          </>
         }
       >
         <main className="page-body">
@@ -126,6 +132,6 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
           )}
         </main>
       </AppShell>
-    </>
+    </DropZone>
   );
 }

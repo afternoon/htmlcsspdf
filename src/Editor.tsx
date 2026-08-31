@@ -3,6 +3,33 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { basicSetup, EditorView } from "codemirror";
 import { useEffect, useRef } from "react";
 
+/** Whether a drag carries files, rather than text moved within the editor. */
+function carriesFiles(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes("Files") ?? false;
+}
+
+/**
+ * Decline file drops, so the page's drop zone is the only thing that acts on
+ * them.
+ *
+ * CodeMirror reads a dropped file itself and pastes its text at the cursor.
+ * Left enabled, a dropped stylesheet would both replace the CSS pane and be
+ * pasted into whichever pane it landed on — and since its read is
+ * asynchronous, the paste would land last and win.
+ *
+ * Returning true marks the event handled, which stops the built-in handler:
+ * extension handlers run first and the loop breaks on the first true. The
+ * event still bubbles, so the drop zone above still receives it. Only file
+ * drags are declined — dragging selected text within the editor stays
+ * CodeMirror's.
+ */
+const declineFileDrops = EditorView.domEventHandlers({
+  drop: carriesFiles,
+  // Returning true here also calls preventDefault, which is what tells the
+  // browser a drop is allowed at all, and suppresses the text drop cursor.
+  dragover: carriesFiles,
+});
+
 interface EditorProps {
   value: string;
   language: Extension;
@@ -39,6 +66,7 @@ export function Editor({ value, language, onChange, label }: EditorProps) {
       doc: value,
       extensions: [
         basicSetup,
+        declineFileDrops,
         compartment.of(languageRef.current),
         oneDark,
         EditorView.lineWrapping,
