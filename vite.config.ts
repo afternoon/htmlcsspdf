@@ -8,7 +8,14 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr" } }),
-    tanstackStart(),
+    tanstackStart({
+      // Tests live beside what they test, `src/routes/` included. They export
+      // no Route, so the generator warns about each one and leaves it out of
+      // the tree — which is right, but the warning reads like a mistake. This
+      // says up front that a `*.test.ts(x)` file is never a route. Matched
+      // against the bare filename, not the path.
+      router: { routeFileIgnorePattern: "\\.test\\.tsx?$" },
+    }),
     react({
       // The React Compiler memoises automatically, and more precisely than
       // hand-written dependency arrays, so components are written without
