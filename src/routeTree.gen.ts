@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known.oauth-protected-resource'
 import { Route as ApiDocumentsRouteImport } from './routes/api.documents'
+import { Route as ApiMcpRouteImport } from './routes/api.mcp'
 import { Route as ApiRenderRouteImport } from './routes/api.render'
 import { Route as DIdRouteImport } from './routes/d.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 import { Route as ApiDocumentsIdRouteImport } from './routes/api.documents.$id'
+import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
+import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as ApiDocumentsIdNameRouteImport } from './routes/api.documents.$id.name'
 import { Route as ApiDocumentsIdThumbnailRouteImport } from './routes/api.documents.$id.thumbnail'
 
@@ -24,14 +30,35 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotwellKnownOauthProtectedResourceRoute =
+  DotwellKnownOauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
   id: '/api/documents',
   path: '/api/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRenderRoute = ApiRenderRouteImport.update({
@@ -54,6 +81,18 @@ const ApiDocumentsIdRoute = ApiDocumentsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiDocumentsRoute,
 } as any)
+const DotwellKnownOauthAuthorizationServerApiAuthRoute =
+  DotwellKnownOauthAuthorizationServerApiAuthRouteImport.update({
+    id: '/.well-known/oauth-authorization-server/api/auth',
+    path: '/.well-known/oauth-authorization-server/api/auth',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOauthProtectedResourceApiMcpRoute =
+  DotwellKnownOauthProtectedResourceApiMcpRouteImport.update({
+    id: '/api/mcp',
+    path: '/api/mcp',
+    getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
+  } as any)
 const ApiDocumentsIdNameRoute = ApiDocumentsIdNameRouteImport.update({
   id: '/name',
   path: '/name',
@@ -67,35 +106,53 @@ const ApiDocumentsIdThumbnailRoute = ApiDocumentsIdThumbnailRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/docs': typeof DocsRoute
+  '/login': typeof LoginRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/mcp': typeof ApiMcpRoute
   '/api/render': typeof ApiRenderRoute
   '/d/$id': typeof DIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
   '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/docs': typeof DocsRoute
+  '/login': typeof LoginRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/mcp': typeof ApiMcpRoute
   '/api/render': typeof ApiRenderRoute
   '/d/$id': typeof DIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
   '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/consent': typeof ConsentRoute
   '/docs': typeof DocsRoute
+  '/login': typeof LoginRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/api/documents': typeof ApiDocumentsRouteWithChildren
+  '/api/mcp': typeof ApiMcpRoute
   '/api/render': typeof ApiRenderRoute
   '/d/$id': typeof DIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/documents/$id': typeof ApiDocumentsIdRouteWithChildren
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/documents/$id/name': typeof ApiDocumentsIdNameRoute
   '/api/documents/$id/thumbnail': typeof ApiDocumentsIdThumbnailRoute
 }
@@ -103,45 +160,68 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/consent'
     | '/docs'
+    | '/login'
+    | '/.well-known/oauth-protected-resource'
     | '/api/documents'
+    | '/api/mcp'
     | '/api/render'
     | '/d/$id'
     | '/api/auth/$'
     | '/api/documents/$id'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/documents/$id/name'
     | '/api/documents/$id/thumbnail'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/consent'
     | '/docs'
+    | '/login'
+    | '/.well-known/oauth-protected-resource'
     | '/api/documents'
+    | '/api/mcp'
     | '/api/render'
     | '/d/$id'
     | '/api/auth/$'
     | '/api/documents/$id'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/documents/$id/name'
     | '/api/documents/$id/thumbnail'
   id:
     | '__root__'
     | '/'
+    | '/consent'
     | '/docs'
+    | '/login'
+    | '/.well-known/oauth-protected-resource'
     | '/api/documents'
+    | '/api/mcp'
     | '/api/render'
     | '/d/$id'
     | '/api/auth/$'
     | '/api/documents/$id'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/documents/$id/name'
     | '/api/documents/$id/thumbnail'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConsentRoute: typeof ConsentRoute
   DocsRoute: typeof DocsRoute
+  LoginRoute: typeof LoginRoute
+  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   ApiDocumentsRoute: typeof ApiDocumentsRouteWithChildren
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiRenderRoute: typeof ApiRenderRoute
   DIdRoute: typeof DIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  DotwellKnownOauthAuthorizationServerApiAuthRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -153,6 +233,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs': {
       id: '/docs'
       path: '/docs'
@@ -160,11 +247,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents': {
       id: '/api/documents'
       path: '/api/documents'
       fullPath: '/api/documents'
       preLoaderRoute: typeof ApiDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/render': {
@@ -195,6 +303,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsIdRouteImport
       parentRoute: typeof ApiDocumentsRoute
     }
+    '/.well-known/oauth-authorization-server/api/auth': {
+      id: '/.well-known/oauth-authorization-server/api/auth'
+      path: '/.well-known/oauth-authorization-server/api/auth'
+      fullPath: '/.well-known/oauth-authorization-server/api/auth'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource/api/mcp': {
+      id: '/.well-known/oauth-protected-resource/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/.well-known/oauth-protected-resource/api/mcp'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRouteImport
+      parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
+    }
     '/api/documents/$id/name': {
       id: '/api/documents/$id/name'
       path: '/name'
@@ -211,6 +333,21 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface DotwellKnownOauthProtectedResourceRouteChildren {
+  DotwellKnownOauthProtectedResourceApiMcpRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRoute
+}
+
+const DotwellKnownOauthProtectedResourceRouteChildren: DotwellKnownOauthProtectedResourceRouteChildren =
+  {
+    DotwellKnownOauthProtectedResourceApiMcpRoute:
+      DotwellKnownOauthProtectedResourceApiMcpRoute,
+  }
+
+const DotwellKnownOauthProtectedResourceRouteWithChildren =
+  DotwellKnownOauthProtectedResourceRoute._addFileChildren(
+    DotwellKnownOauthProtectedResourceRouteChildren,
+  )
 
 interface ApiDocumentsIdRouteChildren {
   ApiDocumentsIdNameRoute: typeof ApiDocumentsIdNameRoute
@@ -240,11 +377,18 @@ const ApiDocumentsRouteWithChildren = ApiDocumentsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConsentRoute: ConsentRoute,
   DocsRoute: DocsRoute,
+  LoginRoute: LoginRoute,
+  DotwellKnownOauthProtectedResourceRoute:
+    DotwellKnownOauthProtectedResourceRouteWithChildren,
   ApiDocumentsRoute: ApiDocumentsRouteWithChildren,
+  ApiMcpRoute: ApiMcpRoute,
   ApiRenderRoute: ApiRenderRoute,
   DIdRoute: DIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  DotwellKnownOauthAuthorizationServerApiAuthRoute:
+    DotwellKnownOauthAuthorizationServerApiAuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

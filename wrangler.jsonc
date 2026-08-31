@@ -4,6 +4,19 @@
   "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
+  // Declared so `wrangler types` emits these bindings from the config rather
+  // than inferring them from whatever `.dev.vars` happens to hold. Without it
+  // the generated `worker-configuration.d.ts` — which is committed — depends on
+  // an untracked file, so a fresh clone regenerates it without these and the
+  // typecheck fails on code that is perfectly correct. CI found exactly that.
+  "secrets": {
+    "required": [
+      "BETTER_AUTH_SECRET",
+      "BETTER_AUTH_URL",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET"
+    ]
+  },
   "browser": {
     "binding": "BROWSER"
   },

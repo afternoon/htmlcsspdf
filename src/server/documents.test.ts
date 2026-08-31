@@ -1,6 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+// @vitest-environment node
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createDocument,
@@ -11,55 +9,13 @@ import {
   renameDocument,
   updateDocument,
 } from "./documents.ts";
+import { ALICE, BOB, createTestDb } from "./testDatabase.ts";
 
 /**
  * The ownership rule has a real security consequence, so it is tested against
- * a real SQLite database running the real migration — not a mock. If the
- * migration and these queries ever disagree, that shows up here.
+ * a real SQLite database running the real migrations — not a mock. If the
+ * migrations and these queries ever disagree, that shows up here.
  */
-
-const ALICE = "user-alice";
-const BOB = "user-bob";
-
-/** Adapt node:sqlite to the small slice of the D1 API the queries use. */
-function createTestDb(): { db: D1Database; raw: DatabaseSync } {
-  const raw = new DatabaseSync(":memory:");
-  // Every migration, in order, from the project root — so these tests run
-  // against the same schema production has, and schema drift fails here rather
-  // than in a deploy.
-  const dir = join(process.cwd(), "migrations");
-  for (const file of readdirSync(dir).sort()) {
-    if (file.endsWith(".sql")) raw.exec(readFileSync(join(dir, file), "utf8"));
-  }
-
-  for (const id of [ALICE, BOB]) {
-    raw
-      .prepare(
-        `insert into "user" ("id","name","email","emailVerified","createdAt","updatedAt")
-         values (?, ?, ?, 1, date('now'), date('now'))`,
-      )
-      .run(id, id, `${id}@test.local`);
-  }
-
-  const statement = (sql: string, params: unknown[] = []): D1PreparedStatement =>
-    ({
-      bind: (...next: unknown[]) => statement(sql, next),
-      first: async <T>() =>
-        (raw.prepare(sql).get(...(params as never[])) ?? null) as T | null,
-      all: async <T>() => ({
-        results: raw.prepare(sql).all(...(params as never[])) as T[],
-      }),
-      run: async () => {
-        const info = raw.prepare(sql).run(...(params as never[]));
-        return { meta: { changes: Number(info.changes) } };
-      },
-    }) as unknown as D1PreparedStatement;
-
-  return {
-    db: { prepare: (sql: string) => statement(sql) } as unknown as D1Database,
-    raw,
-  };
-}
 
 let db: D1Database;
 
