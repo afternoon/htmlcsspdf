@@ -75,6 +75,19 @@ async function connect(userId: string, scopes: ReadonlySet<string>) {
       };
       return answer.result.tools.map((tool) => tool.name).sort();
     },
+    /** The fields a tool asks a client to fill in, sorted. */
+    async toolInputs(name: string): Promise<string[]> {
+      const answer = (await request("tools/list", {})) as {
+        result: {
+          tools: {
+            name: string;
+            inputSchema?: { properties?: Record<string, unknown> };
+          }[];
+        };
+      };
+      const tool = answer.result.tools.find((candidate) => candidate.name === name);
+      return Object.keys(tool?.inputSchema?.properties ?? {}).sort();
+    },
     async call(name: string, args: Record<string, unknown>) {
       const answer = (await request("tools/call", { name, arguments: args })) as {
         result?: ToolResult;
@@ -105,6 +118,21 @@ beforeEach(() => {
   // Thumbnail capture is handed to `waitUntil` and never awaited, so a stub
   // that does nothing is what an unavailable Browser Run looks like.
   env.THUMBNAILS = { delete: async () => {} } as unknown as R2Bucket;
+});
+
+describe("what a tool asks for", () => {
+  it("does not offer an agent the browser's pacing flag", async () => {
+    // `capturePreview` exists because the editor writes on every pause in
+    // typing and cannot afford a browser render each time. An agent writes a
+    // document at a time, so the flag is a question with no meaning here —
+    // and it reached this surface once already, by being added to the schema
+    // the tool is built from.
+    const alice = await connect(ALICE, READ_WRITE);
+
+    expect(await alice.toolInputs("update_document")).toEqual(["css", "html", "id"]);
+
+    await alice.close();
+  });
 });
 
 describe("scopes decide the tool surface", () => {

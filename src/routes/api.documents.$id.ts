@@ -1,6 +1,6 @@
 import { env, waitUntil } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
-import { UpdateDocumentSchema } from "../documentsApi.ts";
+import { UpdateDocumentRequestSchema } from "../documentsApi.ts";
 import { deleteDocument, loadDocument, updateDocument } from "../server/documents.ts";
 import { jsonError, withUser } from "../server/session.ts";
 import { captureThumbnail, thumbnailKey } from "../server/thumbnails.ts";
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/documents/$id")({
 
       PUT: ({ request, params }) =>
         withUser(request, async (user) => {
-          const parsed = UpdateDocumentSchema.safeParse(
+          const parsed = UpdateDocumentRequestSchema.safeParse(
             await request.json().catch(() => null),
           );
           if (!parsed.success) return jsonError(400, "Invalid document content.");

@@ -43,15 +43,25 @@ export type SaveDocumentInput = z.infer<typeof SaveDocumentSchema>;
 export const UpdateDocumentSchema = z.object({
   html: DocumentBody,
   css: DocumentBody,
-  /**
-   * Whether this write should also refresh the stored preview image.
-   *
-   * Defaults to true, so a caller that says nothing gets the behaviour saving
-   * has always had. Auto-save opts out: it writes on every pause in typing,
-   * and a browser render per pause would spend the Browser Run quota that the
-   * PDF itself depends on. The preview is refreshed once the editing settles,
-   * through the thumbnail endpoint.
-   */
+});
+
+/**
+ * What `PUT /api/documents/:id` accepts: the content, plus what to do about
+ * the preview image.
+ *
+ * Kept apart from the content itself because only the browser has a reason to
+ * ask. `capturePreview` defaults to true, so a caller that says nothing gets
+ * the behaviour saving has always had; auto-save opts out, since it writes on
+ * every pause in typing and a browser render per pause would spend the Browser
+ * Run quota the PDF itself depends on — it asks for the preview separately,
+ * once the editing settles.
+ *
+ * The MCP tools take `UpdateDocumentSchema` as their input schema directly, so
+ * a field added here is a field an agent is asked to fill in. An agent writes a
+ * document at a time and has no pacing problem to solve, which is why this one
+ * stops at the HTTP boundary.
+ */
+export const UpdateDocumentRequestSchema = UpdateDocumentSchema.extend({
   capturePreview: z.boolean().default(true),
 });
 
@@ -140,7 +150,7 @@ export async function saveDocument(
 ): Promise<void> {
   await request(`/api/documents/${id}`, {
     method: "PUT",
-    body: JSON.stringify(UpdateDocumentSchema.parse({ html, css, ...options })),
+    body: JSON.stringify(UpdateDocumentRequestSchema.parse({ html, css, ...options })),
   });
 }
 
