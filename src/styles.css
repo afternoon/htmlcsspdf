@@ -610,6 +610,34 @@
     }
   }
 
+  /* The consent screen's list of what an app is asking for. Left-aligned
+     inside a centred `.empty`, because a ragged centre is hard to scan and
+     this is the one list on the site somebody has to read before deciding. */
+  .scope-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    font-size: var(--text-sm);
+    text-align: start;
+    list-style: none;
+  }
+
+  .consent-client {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+
+    & code {
+      font-size: inherit;
+    }
+  }
+
   .page-error {
     margin-bottom: var(--space-5);
     padding: var(--space-3);

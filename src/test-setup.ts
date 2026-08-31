@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom/vitest";
 
+// Server tests opt into the node environment with a `@vitest-environment`
+// pragma, and this file still runs for them. Everything below stubs the DOM,
+// so it is skipped where there is no DOM to stub rather than throwing on
+// `Range` before a single test has run.
+const hasDom = typeof globalThis.document !== "undefined";
+
 // CodeMirror measures text with Range.getClientRects, which jsdom does not
 // implement. Stub the geometry APIs it needs so the view can lay out.
 const zeroRect = () => ({
@@ -14,11 +20,11 @@ const zeroRect = () => ({
   toJSON: () => ({}),
 });
 
-if (!Range.prototype.getClientRects) {
+if (hasDom && !Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () =>
     Object.assign([], { item: () => null }) as unknown as DOMRectList;
 }
-if (!Range.prototype.getBoundingClientRect) {
+if (hasDom && !Range.prototype.getBoundingClientRect) {
   Range.prototype.getBoundingClientRect = zeroRect as never;
 }
 
