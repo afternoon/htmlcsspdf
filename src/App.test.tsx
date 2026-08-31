@@ -21,9 +21,18 @@ async function renderApp(ui: React.ReactElement) {
   return result;
 }
 
-/** A render response carrying a minimal but valid PDF body. */
+/**
+ * A render response carrying a minimal but valid PDF body.
+ *
+ * Built from bytes rather than a `Blob`. `Response` here is Node's, from
+ * undici, while `Blob` is jsdom's — and jsdom's has no `stream()`, which
+ * undici calls when it takes a Blob body. Passing one threw
+ * `TypeError: object.stream is not a function` *inside this helper*, so every
+ * render in this file failed and the two tests that assert on the error
+ * overlay were the only ones that noticed.
+ */
 function pdfResponse() {
-  return new Response(new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])]), {
+  return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
     status: 200,
     headers: { "content-type": "application/pdf" },
   });

@@ -153,6 +153,19 @@ Two scopes, and they are real rather than decorative: a token carrying only
 so `tools/list` describes what that token can actually do instead of
 advertising three tools that would always fail.
 
+What an agent ends up holding is decided by the `WWW-Authenticate` challenge,
+not by the resource metadata: the MCP client SDK requests exactly the scopes
+that challenge names and never asks for more. So `challengeScopes` in
+`api.mcp.ts` advertises what the resource *offers* — read and write — while
+`requiredScopes` stays at the read it *insists* on. Letting the former default
+to the latter capped every agent at read-only and made the write tools
+unreachable in practice, which is a thing only an end-to-end test can notice.
+
+`legacy: "reject"` has a cost worth knowing: the client SDK negotiates the 2025
+handshake by default, so an agent that has not opted into modern version
+negotiation cannot connect at all. `e2e/mcpFlow.test.ts` pins that behaviour,
+so the trade is written down where it can be revisited.
+
 Note the shape of `.well-known` routing. RFC 8414 and RFC 9728 both insert the
 identifier's path into the well-known prefix rather than appending to it, so
 those documents have to be served from the site root — `src/server/discovery.ts`
@@ -325,9 +338,16 @@ load-bearing for an effect dependency.
 ## Testing
 
 ```sh
-npm test          # vitest run
-npm run test:watch
+bun run test        # everything: unit, then end-to-end
+bun run test:unit   # vitest run
+bun run test:e2e    # vitest run --config vitest.e2e.config.ts
+bun run test:watch
 ```
+
+CI (`.github/workflows/ci.yml`) runs `bun run check` and `bun run test` on every
+push and pull request. Nothing is configured on the runner: the end-to-end
+suite starts its own server and applies its own migrations, and needs no
+secrets.
 
 `src/Editor.test.tsx` guards a subtle regression: the CodeMirror view must
 never be recreated while typing. See the compartment note in `Editor.tsx`.
@@ -342,6 +362,32 @@ than by reaching into the server, so tool schemas and result shaping are
 exercised the way a client would exercise them. `cloudflare:workers` is aliased
 to `src/server/workers.testStub.ts` in `vitest.config.ts`, since that module
 resolves only inside the Workers runtime.
+
+### End-to-end
+
+`e2e/` runs the real app — `vite dev`, so workerd through the Cloudflare plugin
+— and drives `/api/mcp` over HTTP with the **real MCP client SDK**. Discovery,
+dynamic registration, PKCE, the resource indicator and the request envelope are
+all performed by the same code an agent runs, so the test fails if we are
+interoperable only with ourselves.
+
+One step is substituted, and only one: signing in with Google, which no test
+can drive. `e2e/globalSetup.ts` writes a session row and signs the cookie
+itself, standing in for exactly that and nothing more — `e2e/approve.ts` then
+walks the authorize redirect and answers the consent endpoint the way the
+consent page does.
+
+Everything the run needs, it arranges: migrations are applied, two throwaway
+people are created with random ids so a shared local database never leaks state
+between runs, and the server is started and stopped. With no `.dev.vars` — CI —
+the Worker falls back to the variables in `e2e/environment.ts`, and
+`readVars()` resolves them the same way Wrangler does so the test and the
+server always agree on the secret.
+
+The port is fixed at 5173 and `strictPort` is on. `BETTER_AUTH_URL` carries the
+port, and it becomes the OAuth issuer and the MCP resource identifier, so a
+server that quietly moved to the next free port would mint tokens its own
+endpoint rejects. Failing to bind says what actually went wrong.
 
 ## Gotchas
 

@@ -3,7 +3,7 @@ import { requireMcpAuth } from "@better-auth/mcp";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createFileRoute } from "@tanstack/react-router";
 import { createAuth } from "../server/auth.ts";
-import { MCP_READ_SCOPE, mcpResource } from "../server/mcpResource.ts";
+import { MCP_READ_SCOPE, MCP_WRITE_SCOPE, mcpResource } from "../server/mcpResource.ts";
 import { buildMcpServer } from "../server/mcpServer.ts";
 
 /**
@@ -52,6 +52,14 @@ export const Route = createFileRoute("/api/mcp")({
             // Every tool needs at least read. Write is enforced separately, by
             // which tools get registered at all — see `mcpServer.ts`.
             requiredScopes: [MCP_READ_SCOPE],
+            // What the challenge advertises, which is not the same question.
+            // A spec-following client requests exactly the scopes named here
+            // — the MCP SDK unions them into its authorization request and
+            // never asks for more — so leaving this to default to
+            // `requiredScopes` capped every agent at read-only and made the
+            // write tools unreachable in practice. This names what the
+            // resource offers; what it insists on is above.
+            challengeScopes: [MCP_READ_SCOPE, MCP_WRITE_SCOPE],
           },
         )(request),
     },
