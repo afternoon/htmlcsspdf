@@ -159,9 +159,9 @@ assets and dispatches server routes.
 ## MCP
 
 `POST /api/mcp` exposes the document API to agents, so an assistant can write a
-document on someone's behalf. It speaks MCP 2026-07-28 and nothing older —
-`legacy: "reject"`, so a 2025-era client is turned away rather than quietly
-served through a second code path.
+document on someone's behalf. It speaks MCP 2026-07-28, and 2025-era clients
+are served too — `legacy: "stateless"`, the SDK's own fallback over the same
+server factory.
 
 Six tools, each a thin call into `src/server/documents.ts`: `list_documents`,
 `get_document`, `create_document`, `update_document`, `rename_document`,
@@ -228,10 +228,34 @@ that challenge names and never asks for more. So `challengeScopes` in
 to the latter capped every agent at read-only and made the write tools
 unreachable in practice, which is a thing only an end-to-end test can notice.
 
-`legacy: "reject"` has a cost worth knowing: the client SDK negotiates the 2025
-handshake by default, so an agent that has not opted into modern version
-negotiation cannot connect at all. `e2e/mcpFlow.test.ts` pins that behaviour,
-so the trade is written down where it can be revisited.
+### Why both protocol eras are served
+
+This endpoint was modern-only for a while — `legacy: "reject"` — on the
+reasoning that one era means one code path and no 2025 exchange served by
+accident. What changed that is evidence, not taste: `claude mcp add` could not
+connect. Its client never negotiates, so it opened the plain 2025 handshake and
+was answered `-32022 Unsupported protocol version: 2025-11-25` before it ever
+reached a tool. Strictness that turns away the clients you have buys nothing.
+
+So `legacy: "stateless"`. The legacy leg is the SDK's own stateless fallback
+built from the same `buildMcpServer` factory, which is what keeps the two eras
+from drifting: a 2025-era client gets what a 2026-era one gets, a revision
+behind. It costs a `405` on GET and DELETE — the 2025 session operations, which
+this endpoint never had. Authorization is untouched; both eras go through the
+same token.
+
+A client that negotiates still gets 2026-07-28, decided by the SDK's own probe
+per request, so nothing regresses for a modern agent. `e2e/mcpFlow.test.ts`
+pins both eras, including a write through the legacy leg — so when every client
+negotiates, dropping the option is a one-line change with a test to say whether
+it is safe yet.
+
+Worth writing down, since it cost a morning: the client's fallback is
+conservative by design. Its `server/discover` probe accepts only a definitive
+modern answer; a 401, 403 or 5xx is a hard error, and *anything else* — a 4xx
+carrying `-32020`/`-32021`/`-32001`, or any response that is not a JSON-RPC
+result — reads as "not era evidence" and drops it to 2025. So an endpoint that
+serves only the modern era is one edge case away from being unreachable.
 
 ### The Worker has to be allowed to reach its own JWKS
 

@@ -50,6 +50,15 @@ export interface AgentOptions {
    * registration, authorization and the token exchange.
    */
   redirectUrl?: string;
+  /**
+   * Which protocol era to speak. Defaults to the 2026-07-28 pin.
+   *
+   * `"legacy"` models a client that never negotiates — the SDK's default, and
+   * what `claude mcp list` puts on the wire. The endpoint serves both, so both
+   * are worth a test: this is the option that says which one is under test
+   * rather than leaving it to whatever the SDK defaults to next.
+   */
+  era?: "modern" | "legacy";
 }
 
 /**
@@ -136,13 +145,21 @@ const AGENT_INFO = { name: "e2e-agent", version: "1.0.0" };
 /**
  * Pin the client to the 2026-07-28 era.
  *
- * The SDK negotiates `'legacy'` by default — the plain 2025 handshake — and
- * `/api/mcp` is configured `legacy: "reject"`, so a default-configured client
- * is turned away. `mcpFlow.test.ts` asserts that rejection separately; here we
- * are modelling an agent that has opted in, which is the case the endpoint
- * exists to serve.
+ * A pin rather than `'auto'`: the probe would reach the same era against this
+ * endpoint, but silently, so a regression that dropped modern serving would
+ * still pass as a fall back to 2025. Pinned, it fails.
  */
 const MODERN = { versionNegotiation: { mode: { pin: "2026-07-28" } } } as const;
+
+/**
+ * A client that never negotiates: the plain 2025 handshake, byte-identical to
+ * one written before the era existed.
+ *
+ * `mode: 'legacy'` is the SDK's own default, so this is what a client that has
+ * not opted into negotiation puts on the wire — including, as it turned out,
+ * the one this endpoint most needed to serve.
+ */
+const LEGACY = { versionNegotiation: { mode: "legacy" } } as const;
 
 export interface ConnectedAgent {
   client: Client;
@@ -170,7 +187,7 @@ export async function connectAgent(options: AgentOptions): Promise<ConnectedAgen
   }
 
   const transport = new StreamableHTTPClientTransport(url, { authProvider });
-  const client = new Client(AGENT_INFO, MODERN);
+  const client = new Client(AGENT_INFO, options.era === "legacy" ? LEGACY : MODERN);
   await client.connect(transport);
 
   const tokens = await authProvider.tokens();
