@@ -28,9 +28,11 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
       await router.invalidate();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not rename the document.");
-    } finally {
-      setRenamingId(null);
     }
+    // Reached on both paths — the catch above swallows the failure — so this
+    // clears the spinner without a `finally`, which the React Compiler cannot
+    // compile.
+    setRenamingId(null);
   }
 
   async function handleDelete(document: DocumentSummary) {

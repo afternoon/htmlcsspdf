@@ -42,8 +42,13 @@ export function Editor({ value, language, onChange, label }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   // Keep the latest callback reachable without rebuilding the editor.
+  // Assigned in an effect rather than during render: mutating a ref while
+  // rendering is not allowed, and the update listener below only reads it
+  // once the user edits, which is always after the commit.
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   // Callers build the language extension inline (e.g. `language={htmlLang()}`),
   // so its identity changes on every parent render. A compartment lets us swap
