@@ -136,7 +136,8 @@ assets and dispatches server routes.
 - `src/routes/docs.tsx` — `/docs`, the document list.
 - `src/server/` — server-only modules: `auth.ts`, `documents.ts` (D1 queries),
   `render.ts` (Browser Run), `thumbnails.ts`, `session.ts`, `loaderData.ts`,
-  `mcpServer.ts` (the MCP tools), `authPlugins.ts`, `discovery.ts`.
+  `mcpServer.ts` (the MCP tools), `authPlugins.ts`, `discovery.ts`,
+  `nativeClientRegistration.ts`.
 - `src/sanitize.ts` — the HTML allowlist. Runs on the client for feedback and
   on the server as the actual boundary.
 - `src/App.tsx` — three-pane UI, render lifecycle, draft persistence, error
@@ -190,6 +191,29 @@ the agent's side beyond the URL: it discovers the rest starting from a refusal.
 6. The code is exchanged for a JWT access token whose `aud` is the MCP resource
    and whose `sub` is the user id — which is what every tool passes to the
    queries.
+
+Step 4 needs one thing said about it. Registration metadata carries an
+`application_type` that OpenID Connect defaults to `"web"`, and a web client's
+redirect URIs must be https and must not be loopback — but RFC 7591, the spec
+MCP clients register under, has no such field, so a client is under no
+obligation to send one. A client running on somebody's machine has nowhere but
+loopback to receive the redirect, so `claude mcp add` was refused with `web
+clients require https redirect URIs on non-loopback hosts:
+http://localhost:60369/callback` before any consent screen appeared.
+
+`src/server/nativeClientRegistration.ts` is a `hooks.before` middleware that
+derives the field from the redirect URIs instead, by SEP-837's rule — a
+loopback host or a non-http(s) scheme means a native application — which is
+the same rule the MCP client SDK applies when it fills the field in itself, so
+the two cannot disagree about a client. Every one of the provider's own checks
+still runs, a client that states its type keeps what it stated, and registering
+still authorises nothing: consent remains the trust boundary.
+
+Because the client SDK now sends the derived value, an SDK-driven flow cannot
+see the refusal at all — `e2e/mcpFlow.test.ts` posts the registration as raw
+HTTP for that reason, and separately runs the whole flow on a loopback
+callback, since the redirect URI is checked again at authorize and at the token
+exchange.
 
 Two scopes, and they are real rather than decorative: a token carrying only
 `documents:read` gets a server on which the write tools are **not registered**,
