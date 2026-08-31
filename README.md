@@ -137,7 +137,7 @@ assets and dispatches server routes.
 - `src/server/` — server-only modules: `auth.ts`, `documents.ts` (D1 queries),
   `render.ts` (Browser Run), `thumbnails.ts`, `session.ts`, `loaderData.ts`,
   `mcpServer.ts` (the MCP tools), `authPlugins.ts`, `discovery.ts`,
-  `nativeClientRegistration.ts`.
+  `nativeClientRegistration.ts`, `mcpFailure.ts`.
 - `src/sanitize.ts` — the HTML allowlist. Runs on the client for feedback and
   on the server as the actual boundary.
 - `src/App.tsx` — three-pane UI, render lifecycle, draft persistence, error
@@ -232,6 +232,29 @@ unreachable in practice, which is a thing only an end-to-end test can notice.
 handshake by default, so an agent that has not opted into modern version
 negotiation cannot connect at all. `e2e/mcpFlow.test.ts` pins that behaviour,
 so the trade is written down where it can be revisited.
+
+### The Worker has to be allowed to reach its own JWKS
+
+Verifying an access token reads the authorization server's key set over HTTP:
+`@better-auth/mcp` fetches `${BETTER_AUTH_URL}/api/auth/jwks`, which on this
+deployment is the same Worker. By default a Worker's `fetch` to its own zone is
+routed to the *zone's origin server*, skipping every Worker mapped to the URL —
+and there is no origin behind this hostname but the Worker, so that subrequest
+came back as a Cloudflare error page. A non-OK answer there throws a plain
+`Error`, which `requireMcpAuth` cannot read as an authorization failure, so it
+is re-thrown rather than turned into a challenge, and every authorized MCP call
+died. Hence `global_fetch_strictly_public` in `wrangler.jsonc`: it sends such a
+request back through Cloudflare's front door, where it reaches this Worker.
+Nothing else here fetches its own origin.
+
+What made that a morning's work rather than a minute's is worth keeping in
+mind. An exception escaping a server route is answered by the runtime as
+`{"status":500,"unhandled":true,"message":"HTTPError"}` — the message withheld,
+because a framework cannot know what is safe to say — and that is the whole of
+what an agent showed its operator. `src/server/mcpFailure.ts` wraps the route
+so the endpoint says it itself: a JSON-RPC error naming the failure, and a 503
+rather than a 401, since the token was never the problem and a challenge would
+only send somebody back through sign-in to fail the same way.
 
 Note the shape of `.well-known` routing. RFC 8414 and RFC 9728 both insert the
 identifier's path into the well-known prefix rather than appending to it, so
