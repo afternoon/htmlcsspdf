@@ -31,6 +31,13 @@ http://localhost:5173/api/auth/callback/google
 https://htmlcsspdf.ben2.com/api/auth/callback/google
 ```
 
+These four names are declared under `secrets.required` in `wrangler.jsonc`, so
+`wrangler types` emits them from the config rather than inferring them from
+whatever `.dev.vars` happens to hold. Without that, the committed
+`worker-configuration.d.ts` depends on an untracked file: a fresh clone
+regenerates it on `postinstall` without the secrets, and `tsc` then fails on
+perfectly correct code. CI found that the day it was switched on.
+
 Put the client id and secret in `.dev.vars` for local work (it is gitignored),
 and in production set them as secrets:
 
@@ -383,6 +390,13 @@ between runs, and the server is started and stopped. With no `.dev.vars` — CI 
 the Worker falls back to the variables in `e2e/environment.ts`, and
 `readVars()` resolves them the same way Wrangler does so the test and the
 server always agree on the secret.
+
+It also drops the `jwks` row first. Better Auth encrypts the JWKS private key
+with `BETTER_AUTH_SECRET`, so a key left behind by a run under a different
+secret cannot be decrypted and token signing fails with an opaque 500 — which
+is what you would hit the first time you add a `.dev.vars` after running the
+suite without one. Keys are regenerated on demand, so dropping it costs
+nothing.
 
 The port is fixed at 5173 and `strictPort` is on. `BETTER_AUTH_URL` carries the
 port, and it becomes the OAuth issuer and the MCP resource identifier, so a

@@ -68,6 +68,14 @@ export default async function setup(project: TestProject) {
   // contributor may never have applied 0004, and CI starts from nothing.
   d1("migrations apply", ["migrations", "apply"]);
 
+  // Better Auth encrypts the JWKS private key with `BETTER_AUTH_SECRET`, so a
+  // key left behind by a run under a different secret cannot be decrypted and
+  // token signing fails with an opaque 500 — which is what happens the first
+  // time a contributor adds a `.dev.vars` after running this suite without one.
+  // Dropping the key makes each run regenerate one under whatever secret is in
+  // force. Safe: keys are created on demand, and this is a local database.
+  d1("execute", ["execute", "--command", 'delete from "jwks";']);
+
   const alice = personId("alice");
   const bob = personId("bob");
   const aliceToken = crypto.randomUUID();
