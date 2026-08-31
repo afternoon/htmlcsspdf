@@ -939,3 +939,103 @@
     font-size: var(--text-2xs);
   }
 }
+
+/* Dropped files: the target shown while dragging, and the message that
+   follows a drop that could not be used. */
+@layer tokens {
+  :root {
+    /* Sits above the page but below a native <dialog>, which the browser
+       promotes to the top layer regardless. */
+    --overlay-layer: 1;
+  }
+}
+
+@layer components {
+  .drop-overlay {
+    position: fixed;
+    z-index: var(--overlay-layer);
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--space-5);
+    /* Transparent to the pointer: the overlay appears under the cursor
+       mid-drag, and taking hits would fire a `dragleave` for the element the
+       drag was actually over, flickering the overlay away and back. */
+    pointer-events: none;
+    background: var(--scrim);
+  }
+
+  .drop-overlay-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    /* Dashed, and in the accent: the border is what says "into here", and it
+       should not read as just another panel. */
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: 0 8px 24px var(--shadow);
+    color: var(--accent);
+  }
+
+  .drop-overlay-text {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--text-sm);
+  }
+
+  /* Always present so a message has a live region to land in, and inert while
+     empty so it cannot sit over the corner of the page it occupies. */
+  .toast-region {
+    position: fixed;
+    z-index: var(--overlay-layer);
+    inset-block-end: var(--space-5);
+    inset-inline: 0;
+    /* `display` is set here rather than left to the `hidden` attribute alone:
+       any display declaration in a layer beats the UA rule, so the empty
+       region would otherwise still take a strip across the page. */
+    display: none;
+    justify-items: center;
+    padding-inline: var(--space-5);
+    pointer-events: none;
+  }
+
+  .toast-region:not([hidden]) {
+    display: grid;
+  }
+
+  /* Styled as a failure throughout: the only thing that reaches the toast is
+     a drop that could not be used. Give it a variant before that changes. */
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    max-inline-size: 60ch;
+    padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius);
+    background: var(--error-bg);
+    box-shadow: 0 8px 24px var(--shadow);
+    color: var(--error-text);
+    font-size: var(--text-sm);
+    pointer-events: auto;
+  }
+
+  .toast-dismiss {
+    --btn-bg: transparent;
+    --btn-fg: var(--error-muted);
+
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: var(--space-1);
+    border-color: transparent;
+
+    &:hover {
+      --btn-fg: var(--error-text);
+
+      border-color: var(--error-border);
+    }
+  }
+}

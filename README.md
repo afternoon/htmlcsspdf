@@ -101,6 +101,9 @@ assets and dispatches server routes.
   shown can never differ from the name stored.
 - `src/Editor.tsx` — CodeMirror 6 wrapper.
 - `src/Divider.tsx` — draggable split handles.
+- `src/dropFiles.ts` — what a dropped file means; see Dropping files below.
+- `src/DropZone.tsx` — the window-wide file drop target and its overlay.
+- `src/Toast.tsx` / `src/useToast.ts` — the one transient message a page shows.
 
 ## Documents and access control
 
@@ -154,6 +157,39 @@ HTML sits above CSS at a 2:1 height ratio; the editor column and the preview
 split the width 1:1. Both splits are draggable (and keyboard-nudgeable with
 the arrow keys when a divider is focused), clamped to 15–85% so a pane can
 never be collapsed shut. The split is remembered in localStorage.
+
+## Dropping files
+
+Both pages take dropped files, and the whole window is the target — the header,
+the gap between panes and the preview all accept a drop.
+
+- In the editor, an HTML file replaces the HTML pane and a stylesheet replaces
+  the CSS pane. Dropping one of each fills both; the pane no file speaks for is
+  left alone.
+- On the document list there is nothing to overwrite, so a drop creates a
+  document and opens it, named after the file rather than "Untitled".
+- More than two files, two files of the same kind, a file that is neither HTML
+  nor CSS, and a file over the 2 MB document limit are all refused in a toast,
+  and nothing is changed.
+
+The rules live in `src/dropFiles.ts` with no framework or DOM imports beyond the
+slice of `File` they read, so both pages decide identically.
+
+Two things the drop zone has to do that are not obvious:
+
+- **File drags are claimed in the capture phase and stopped there.** CodeMirror
+  has a file drop handler of its own that reads the file and pastes its text at
+  the cursor. Left to run, a dropped stylesheet would both replace the CSS pane
+  and be pasted into whichever pane it landed on — and since its read is
+  asynchronous, the paste would land last and win.
+- **Only drags carrying files are claimed** (`dataTransfer.types` includes
+  `Files`). CodeMirror moves selected text by drag, and taking that drop would
+  break editing in the name of a feature about files.
+
+The extension is consulted only when the browser reports no MIME type at all,
+which happens for files dragged from places the platform has no mapping for. A
+type we recognise and do not accept is a rejection, not an invitation to guess
+from the name.
 
 ## Validation and formatting
 
