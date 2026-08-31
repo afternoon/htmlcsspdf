@@ -24,11 +24,12 @@ async function renderApp(ui: React.ReactElement) {
 /**
  * A render response carrying a minimal but valid PDF body.
  *
- * The bytes are passed as a `Uint8Array` rather than wrapped in a `Blob`:
- * `Response` comes from undici and `Blob` from jsdom, and undici cannot read
- * jsdom's blob — `res.blob()` threw a TypeError, which the renderer reported
- * as an unreachable service, so every test here rendered an error instead of
- * a preview.
+ * Built from bytes rather than a `Blob`. `Response` here is Node's, from
+ * undici, while `Blob` is jsdom's — and jsdom's has no `stream()`, which
+ * undici calls when it takes a Blob body. Passing one threw
+ * `TypeError: object.stream is not a function` *inside this helper*, so every
+ * render in this file failed and the two tests that assert on the error
+ * overlay were the only ones that noticed.
  */
 function pdfResponse() {
   return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {

@@ -1,6 +1,8 @@
 import { waitUntil } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { authPlugins } from "./authPlugins.ts";
+import { mcpResource } from "./mcpResource.ts";
 
 /**
  * Better Auth, built per request.
@@ -36,8 +38,11 @@ export function createAuth(env: Env) {
       // and the handler was silently never installed.
       backgroundTasks: { handler: waitUntil },
     },
-    // Must be last: the plugin warns at runtime if another plugin follows it.
-    plugins: [tanstackStartCookies()],
+    plugins: [
+      ...authPlugins(mcpResource(env)),
+      // Must be last: the plugin warns at runtime if another plugin follows it.
+      tanstackStartCookies(),
+    ],
   });
 }
 
