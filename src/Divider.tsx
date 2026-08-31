@@ -28,8 +28,13 @@ export function Divider({
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   // Latest callback, so the window listeners don't need re-binding per render.
+  // Assigned in an effect rather than during render: mutating a ref while
+  // rendering is not allowed, and nothing reads this one until a pointer or
+  // key event arrives, which is always after the commit.
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   const vertical = orientation === "vertical";
 

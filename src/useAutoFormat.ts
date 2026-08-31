@@ -31,9 +31,13 @@ export function useAutoFormat(
   const [formatting, setFormatting] = useState(false);
 
   // The callback changes identity every render; keeping it in a ref means the
-  // debounce restarts only when the content or the toggle changes.
+  // debounce restarts only when the content or the toggle changes. Assigned in
+  // an effect rather than during render: mutating a ref while rendering is not
+  // allowed, and the debounced work below only reads it after the commit.
   const onFormattedRef = useRef(onFormatted);
-  onFormattedRef.current = onFormatted;
+  useEffect(() => {
+    onFormattedRef.current = onFormatted;
+  });
 
   // What we last produced, so formatting our own output does not re-trigger.
   const lastFormatted = useRef<{ html: string; css: string } | null>(null);
@@ -53,17 +57,21 @@ export function useAutoFormat(
 
         // `changed` is false when the text is already formatted, and both are
         // left untouched when parsing failed.
-        if (!formattedHtml.changed && !formattedCss.changed) return;
-
-        const next = {
-          html: formattedHtml.changed ? formattedHtml.text : html,
-          css: formattedCss.changed ? formattedCss.text : css,
-        };
-        lastFormatted.current = next;
-        onFormattedRef.current(next);
-      } finally {
-        setFormatting(false);
+        if (formattedHtml.changed || formattedCss.changed) {
+          const next = {
+            html: formattedHtml.changed ? formattedHtml.text : html,
+            css: formattedCss.changed ? formattedCss.text : css,
+          };
+          lastFormatted.current = next;
+          onFormattedRef.current(next);
+        }
+      } catch {
+        // Formatting is best-effort, as the note above says, so a failure
+        // leaves the text alone. Caught rather than left to reject so the
+        // toggle below always settles — a `finally` would do the same, but the
+        // React Compiler cannot compile one.
       }
+      setFormatting(false);
     }, FORMAT_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);

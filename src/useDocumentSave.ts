@@ -161,9 +161,11 @@ export function useDocumentSave(
       } catch (e) {
         setStatus("error");
         setError(e instanceof Error ? e.message : "Could not save.");
-      } finally {
-        writing.current = false;
       }
+      // Reached on both paths — the catch above swallows the failure — so the
+      // flag clears without a `finally`, which the React Compiler cannot
+      // compile.
+      writing.current = false;
     },
     [],
   );
