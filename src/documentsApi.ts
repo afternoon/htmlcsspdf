@@ -43,6 +43,16 @@ export type SaveDocumentInput = z.infer<typeof SaveDocumentSchema>;
 export const UpdateDocumentSchema = z.object({
   html: DocumentBody,
   css: DocumentBody,
+  /**
+   * Whether this write should also refresh the stored preview image.
+   *
+   * Defaults to true, so a caller that says nothing gets the behaviour saving
+   * has always had. Auto-save opts out: it writes on every pause in typing,
+   * and a browser render per pause would spend the Browser Run quota that the
+   * PDF itself depends on. The preview is refreshed once the editing settles,
+   * through the thumbnail endpoint.
+   */
+  capturePreview: z.boolean().default(true),
 });
 
 export const RenameDocumentSchema = z.object({ name: DocumentNameSchema });
@@ -101,7 +111,11 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     );
   }
 
-  return response.status === 204 ? null : await response.json();
+  // Keyed on the content type rather than on 204 alone: a body-less answer is
+  // now an ordinary one — the capture endpoint accepts the work and returns
+  // before the render it queued has run — and parsing nothing as JSON throws.
+  const isJson = response.headers.get("content-type")?.includes("application/json");
+  return isJson ? await response.json() : null;
 }
 
 export async function fetchDocuments(): Promise<DocumentSummary[]> {
@@ -118,11 +132,29 @@ export async function createDocument(input: SaveDocumentInput): Promise<string> 
     .id;
 }
 
-export async function saveDocument(id: string, html: string, css: string): Promise<void> {
+export async function saveDocument(
+  id: string,
+  html: string,
+  css: string,
+  options: { capturePreview?: boolean } = {},
+): Promise<void> {
   await request(`/api/documents/${id}`, {
     method: "PUT",
-    body: JSON.stringify(UpdateDocumentSchema.parse({ html, css })),
+    body: JSON.stringify(UpdateDocumentSchema.parse({ html, css, ...options })),
   });
+}
+
+/**
+ * Ask for a fresh preview of what is already stored.
+ *
+ * Separate from saving because the two are paced differently: content is
+ * written as soon as the user pauses, while the image behind it is worth
+ * rendering only once they have stopped. The server reads the content from
+ * the database rather than taking it from here — the preview should depict
+ * the stored document, not whatever a caller claims it contains.
+ */
+export async function capturePreview(id: string): Promise<void> {
+  await request(`/api/documents/${id}/thumbnail`, { method: "POST" });
 }
 
 export async function renameDocument(id: string, name: string): Promise<void> {

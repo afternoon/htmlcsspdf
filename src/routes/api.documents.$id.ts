@@ -35,15 +35,23 @@ export const Route = createFileRoute("/api/documents/$id")({
 
           // See the note in api.documents.ts: waitUntil keeps the capture alive
           // past the response instead of making the user wait for it.
-          waitUntil(
-            captureThumbnail(
-              params.id,
-              user.id,
-              parsed.data.html,
-              parsed.data.css,
-              saved.revision,
-            ),
-          );
+          //
+          // Skipped when the caller asked for a quiet write. Auto-save writes
+          // on every pause in typing, and Browser Run is quota-bound and
+          // shared with the PDF render — a capture per pause would spend the
+          // quota the document's own output depends on. Those callers ask for
+          // the preview separately, once the editing has settled.
+          if (parsed.data.capturePreview) {
+            waitUntil(
+              captureThumbnail(
+                params.id,
+                user.id,
+                parsed.data.html,
+                parsed.data.css,
+                saved.revision,
+              ),
+            );
+          }
 
           return new Response(null, { status: 204 });
         }),

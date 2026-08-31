@@ -44,7 +44,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
 
   const layout = useLayout();
   const { pdfUrl, error, rendering, render, clearError, isStale } = useRenderer();
-  const save = useDocumentSave(documentId ?? null, documentName ?? null);
+  const save = useDocumentSave(html, css, documentId ?? null, documentName ?? null);
 
   const applyFormatted = useCallback((next: Doc) => {
     setHtml(next.html);
@@ -67,8 +67,9 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     void render(initial.html, initial.css);
   }, [render, initial]);
 
-  // Only unsaved work is drafted. A stored document already has a home, and
-  // drafting it would resurrect it over the next new document.
+  // Only unsaved work is drafted. A stored document already has a home — it
+  // saves itself as it is edited — and drafting it would resurrect it over the
+  // next new document.
   useEffect(() => {
     if (documentId) return;
     const timer = setTimeout(() => saveDraft({ html, css }), SAVE_DEBOUNCE_MS);
@@ -93,7 +94,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   }, [renderNow]);
 
   function handleSave() {
-    save.requestSave({ html, css });
+    save.requestSave();
   }
 
   function handleDownload() {
@@ -127,7 +128,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
             onAutoFormatChange={autoFormat.setEnabled}
             formatting={autoFormat.formatting}
             onSave={handleSave}
-            saveState={save.stateFor({ html, css })}
+            saveState={save.state}
           />
         }
       >
