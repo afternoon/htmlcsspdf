@@ -139,8 +139,12 @@ export function useDocumentSave(
   /**
    * Write the content to a document that already exists.
    *
-   * Identity-stable, so the effects below re-run when the content or the
-   * session changes rather than on every render.
+   * Memoised by hand, against the house rule of leaving that to the React
+   * Compiler: the effects below key their debounce on this identity, and a
+   * fresh function per render would restart the timer instead of the edit
+   * doing it. The compiler cannot be relied on for that here — it declines
+   * whole functions it cannot reason about, and correctness would silently
+   * follow whether it did.
    */
   const write = useCallback(
     async (id: string, doc: Doc, { capturePreview = true } = {}) => {

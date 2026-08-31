@@ -3,7 +3,9 @@ import { html as htmlLang } from "@codemirror/lang-html";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "./AppShell.tsx";
 import { Divider } from "./Divider.tsx";
+import { DropZone } from "./DropZone.tsx";
 import { loadDraft, saveDraft } from "./draft.ts";
+import { readDrop } from "./dropFiles.ts";
 import { EditableName } from "./EditableName.tsx";
 import { Editor } from "./Editor.tsx";
 import { EditorActions } from "./EditorActions.tsx";
@@ -11,10 +13,13 @@ import { PreviewPane } from "./PreviewPane.tsx";
 import { SignInDialog } from "./SignInDialog.tsx";
 import { SAMPLE_CSS, SAMPLE_HTML } from "./sample.ts";
 import type { Doc } from "./storage.ts";
+import { Toast } from "./Toast.tsx";
 import { useAutoFormat } from "./useAutoFormat.ts";
 import { useDocumentSave } from "./useDocumentSave.ts";
+import { useFileDrop } from "./useFileDrop.ts";
 import { useLayout } from "./useLayout.ts";
 import { useRenderer } from "./useRenderer.ts";
+import { useToast } from "./useToast.ts";
 
 const SAVE_DEBOUNCE_MS = 300;
 const AUTO_PREVIEW_DEBOUNCE_MS = 1000;
@@ -45,6 +50,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   const layout = useLayout();
   const { pdfUrl, error, rendering, render, clearError, isStale } = useRenderer();
   const save = useDocumentSave(html, css, documentId ?? null, documentName ?? null);
+  const toast = useToast();
 
   const applyFormatted = useCallback((next: Doc) => {
     setHtml(next.html);
@@ -97,6 +103,32 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     save.requestSave();
   }
 
+  /**
+   * Replace a pane from a dropped file.
+   *
+   * Each file overwrites the pane it belongs to and leaves the other alone, so
+   * dropping a stylesheet onto a document you are working on swaps the CSS
+   * without touching the markup. There is no confirmation: the editor keeps
+   * its own undo history, so a drop is undone like any other edit — and on a
+   * stored document, undoing it is written back the same way it was.
+   */
+  async function handleDrop(files: File[]) {
+    const result = await readDrop(files);
+    if (!result.ok) {
+      toast.show(result.error);
+      return;
+    }
+
+    if (result.content.html !== undefined) setHtml(result.content.html);
+    if (result.content.css !== undefined) setCss(result.content.css);
+  }
+
+  // Declared after `handleDrop` rather than beside the other hooks: reading a
+  // function declaration before its statement runs is a use-before-init the
+  // React Compiler refuses to reason about, and it responds by skipping this
+  // component entirely rather than by failing.
+  const drop = useFileDrop((files) => void handleDrop(files));
+
   function handleDownload() {
     if (!pdfUrl) return;
     const a = document.createElement("a");
@@ -115,8 +147,9 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     );
 
   return (
-    <>
+    <DropZone drop={drop} hint="Drop HTML or CSS to replace the matching pane">
       <SignInDialog open={save.signInOpen} onClose={save.closeSignIn} />
+      <Toast toast={toast.toast} onDismiss={toast.dismiss} />
 
       <AppShell
         title={title}
@@ -187,6 +220,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
           />
         </main>
       </AppShell>
-    </>
+    </DropZone>
   );
 }

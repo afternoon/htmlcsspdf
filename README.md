@@ -17,6 +17,15 @@ Then open http://localhost:5173. The Cloudflare Vite plugin runs the server
 routes in the real Workers runtime, so the `BROWSER` and `DB` bindings work
 locally and both client and server code hot-reload — no build step in the loop.
 
+**Restart the dev server after a dependency changes.** Adding or removing a
+package while it is running makes Vite re-optimise its dependency pre-bundle,
+and the SSR module runner keeps modules from the previous one. The result is a
+server render that fails with something like `Cannot read properties of null
+(reading 'useState')` or ``(0 , __vite_ssr_import_1__.t) is not a function``,
+sometimes with a note about more than one copy of React. Nothing is wrong with
+the code — the page still hydrates on the client, which is what makes it easy
+to miss. Restart, or `rm -rf node_modules/.vite` if it persists.
+
 The editor works without any of the auth setup below; only saving needs it.
 
 ## Auth setup
@@ -124,6 +133,10 @@ assets and dispatches server routes.
   shown can never differ from the name stored.
 - `src/Editor.tsx` — CodeMirror 6 wrapper.
 - `src/Divider.tsx` — draggable split handles.
+- `src/dropFiles.ts` — what a dropped file means; see Dropping files below.
+- `src/useFileDrop.ts` — react-dropzone wiring: the page target and the picker.
+- `src/DropZone.tsx` — wraps the page in that target and shows the overlay.
+- `src/Toast.tsx` / `src/useToast.ts` — the one transient message a page shows.
 
 ## Documents and access control
 
@@ -177,6 +190,55 @@ HTML sits above CSS at a 2:1 height ratio; the editor column and the preview
 split the width 1:1. Both splits are draggable (and keyboard-nudgeable with
 the arrow keys when a divider is focused), clamped to 15–85% so a pane can
 never be collapsed shut. The split is remembered in localStorage.
+
+## Dropping files
+
+Both pages take dropped files, and the whole window is the target — the header,
+the gap between panes and the preview all accept a drop. **New from files** on
+the document list reaches the same thing through the file picker, since a drag
+is a pointer gesture with no keyboard equivalent.
+
+- In the editor, an HTML file replaces the HTML pane and a stylesheet replaces
+  the CSS pane. Dropping one of each fills both; the pane no file speaks for is
+  left alone.
+- On the document list there is nothing to overwrite, so a drop creates a
+  document and opens it, named after the file rather than "Untitled".
+- More than two files, two files of the same kind, a file that is neither HTML
+  nor CSS, and a file over the 2 MB document limit are all refused in a toast,
+  and nothing is changed.
+
+The split is deliberate. **react-dropzone** owns the drag plumbing — the
+enter/leave counting a naive boolean gets wrong, directory expansion, and the
+document-level guard that stops the browser navigating to a dropped file. What
+a drop *means* is decided by `src/dropFiles.ts`, a plain module with no
+framework or DOM imports beyond the slice of `File` it reads, so both pages
+answer identically and the messages stay ours rather than becoming generic
+rejection codes. `accept` is passed to `useDropzone` only to filter the
+picker's dialog; rejections are forwarded into the same rules, so dropping a
+PDF says so by name instead of being a silent non-event.
+
+Two things that are not obvious:
+
+- **The editor declines file drops** (`declineFileDrops` in `src/Editor.tsx`).
+  CodeMirror reads a dropped file itself and pastes its text at the cursor.
+  Left enabled, a dropped stylesheet would both replace the CSS pane and be
+  pasted into whichever pane it landed on — and since its read is asynchronous,
+  the paste would land last and win. `EditorView.domEventHandlers` returning
+  true marks the event handled, which stops the built-in handler:
+  `computeHandlers` appends the built-in last and `runHandlers` breaks on the
+  first handler returning true. The event still bubbles, so the drop zone above
+  still receives it. Only file drags are declined — dragging selected text
+  within the editor stays CodeMirror's.
+- **The zone is a wrapper, not the window.** react-dropzone delivers through
+  the element its root props are on, so `.drop-root` fills the viewport and
+  `.app` sizes itself against it. `noClick` and `noKeyboard` are set, because a
+  click or Enter anywhere on a page-sized target would otherwise open a file
+  dialog.
+
+The file extension is consulted only when the browser reports no MIME type at
+all, which happens for files dragged from places the platform has no mapping
+for. A type we recognise and do not accept is a rejection, not an invitation to
+guess from the name.
 
 ## Validation and formatting
 

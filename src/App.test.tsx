@@ -21,9 +21,17 @@ async function renderApp(ui: React.ReactElement) {
   return result;
 }
 
-/** A render response carrying a minimal but valid PDF body. */
+/**
+ * A render response carrying a minimal but valid PDF body.
+ *
+ * The bytes are passed as a `Uint8Array` rather than wrapped in a `Blob`:
+ * `Response` comes from undici and `Blob` from jsdom, and undici cannot read
+ * jsdom's blob — `res.blob()` threw a TypeError, which the renderer reported
+ * as an unreachable service, so every test here rendered an error instead of
+ * a preview.
+ */
 function pdfResponse() {
-  return new Response(new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])]), {
+  return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
     status: 200,
     headers: { "content-type": "application/pdf" },
   });
@@ -84,10 +92,11 @@ describe("App", () => {
     await renderApp(<App />);
 
     // Present but hidden — a region inserted with its first message is often
-    // missed by screen readers.
-    const alert = document.querySelector('[role="alert"]');
-    expect(alert).toBeInTheDocument();
-    expect(alert).not.toBeVisible();
+    // missed by screen readers. There are two: the preview's own errors and
+    // the toast that reports a refused drop.
+    const alerts = [...document.querySelectorAll('[role="alert"]')];
+    expect(alerts).toHaveLength(2);
+    for (const alert of alerts) expect(alert).not.toBeVisible();
   });
 
   it("shows the server's message when a render fails", async () => {
@@ -222,5 +231,169 @@ describe("App", () => {
     await user.keyboard("{Meta>}{Enter}{/Meta}");
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+/**
+ * Drop files onto the page, the way a real drag does.
+ *
+ * jsdom implements neither `DragEvent` nor `DataTransfer`, so the event
+ * carries the shape react-dropzone reads: `types` is what marks a file drag,
+ * and `items` is what it expands into files. Dispatched on a descendant so it
+ * bubbles to the drop target the way a real drop does.
+ */
+function dropFiles(
+  files: File[],
+  { types = ["Files"], target }: { types?: string[]; target?: Element } = {},
+) {
+  const event = new Event("drop", { bubbles: true, cancelable: true });
+  // A real text drag carries string items, not file ones, and react-dropzone
+  // reads either — so the items have to follow `types`, or the fixture would
+  // describe a file drag whatever it claims to be.
+  const fileDrag = types.includes("Files");
+  Object.defineProperty(event, "dataTransfer", {
+    value: {
+      types,
+      files: fileDrag ? files : [],
+      getData: () => "",
+      items: files.map((file) => ({
+        kind: fileDrag ? "file" : "string",
+        type: file.type,
+        getAsFile: () => file,
+      })),
+    },
+  });
+  (target ?? screen.getByRole("textbox", { name: "HTML" })).dispatchEvent(event);
+  return event;
+}
+
+function htmlFile(name = "page.html", content = "<p>dropped</p>") {
+  return new File([content], name, { type: "text/html" });
+}
+
+function cssFile(name = "theme.css", content = "p { color: red }") {
+  return new File([content], name, { type: "text/css" });
+}
+
+describe("dropping files onto the editor", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => pdfResponse()),
+    );
+  });
+
+  it("replaces the HTML pane with a dropped HTML file", async () => {
+    await renderApp(<App />);
+
+    dropFiles([htmlFile()]);
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "HTML" })).toHaveTextContent(
+        "<p>dropped</p>",
+      ),
+    );
+  });
+
+  it("leaves the other pane alone when only one file is dropped", async () => {
+    await renderApp(<App />);
+    const css = screen.getByRole("textbox", { name: "CSS" });
+    const before = css.textContent;
+
+    dropFiles([htmlFile()]);
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "HTML" })).toHaveTextContent("dropped"),
+    );
+    expect(css.textContent).toBe(before);
+  });
+
+  it("fills both panes when an HTML and a CSS file are dropped together", async () => {
+    await renderApp(<App />);
+
+    dropFiles([htmlFile(), cssFile()]);
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "HTML" })).toHaveTextContent("dropped"),
+    );
+    expect(screen.getByRole("textbox", { name: "CSS" })).toHaveTextContent(
+      "p { color: red }",
+    );
+  });
+
+  it("refuses a third file and says so", async () => {
+    await renderApp(<App />);
+
+    dropFiles([htmlFile(), cssFile(), cssFile("other.css")]);
+
+    const message = await screen.findByText(/at most 2 files/);
+    // The preview keeps its own alert region, so the message is found by what
+    // it says; that it lands in a live region at all is the part worth
+    // asserting about the markup.
+    expect(message.closest('[role="alert"]')).toBeInTheDocument();
+  });
+
+  it("refuses a file that is neither HTML nor CSS", async () => {
+    await renderApp(<App />);
+
+    dropFiles([new File(["%PDF"], "report.pdf", { type: "application/pdf" })]);
+
+    expect(await screen.findByText(/report\.pdf/)).toBeVisible();
+  });
+
+  it("leaves the editors untouched when the drop is refused", async () => {
+    await renderApp(<App />);
+    const html = screen.getByRole("textbox", { name: "HTML" });
+    const before = html.textContent;
+
+    dropFiles([new File(["%PDF"], "report.pdf", { type: "application/pdf" })]);
+
+    await screen.findByText(/report\.pdf/);
+    expect(html.textContent).toBe(before);
+  });
+
+  it("lets the user dismiss the message", async () => {
+    const user = userEvent.setup();
+    await renderApp(<App />);
+
+    dropFiles([new File(["x"], "notes.txt", { type: "text/plain" })]);
+    const message = await screen.findByText(/notes\.txt/);
+
+    await user.click(screen.getByRole("button", { name: "Dismiss message" }));
+    await waitFor(() => expect(message).not.toBeInTheDocument());
+  });
+
+  it("replaces the whole pane when the file lands on an editor", async () => {
+    await renderApp(<App />);
+    const html = screen.getByRole("textbox", { name: "HTML" });
+
+    dropFiles([htmlFile()], { target: html });
+
+    await waitFor(() => expect(html).toHaveTextContent("<p>dropped</p>"));
+    // Exactly the file, not the file appended to what was there. CodeMirror
+    // has a file drop handler of its own that pastes at the cursor, which the
+    // drop zone suppresses; jsdom cannot place a drop for it to paste at, so
+    // this pins the outcome rather than proving the suppression.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(html.textContent).toBe("<p>dropped</p>");
+  });
+
+  // CodeMirror moves selected text by drag; claiming that drop would break
+  // editing in the name of a feature about files.
+  it("ignores a drag that carries no files", async () => {
+    await renderApp(<App />);
+    const html = screen.getByRole("textbox", { name: "HTML" });
+    const css = screen.getByRole("textbox", { name: "CSS" });
+    const before = { html: html.textContent, css: css.textContent };
+
+    dropFiles([htmlFile()], { types: ["text/plain"] });
+
+    // Long enough for the drop rules to have run and reported, had they.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(html.textContent).toBe(before.html);
+    expect(css.textContent).toBe(before.css);
+    expect(
+      screen.queryByRole("button", { name: "Dismiss message" }),
+    ).not.toBeInTheDocument();
   });
 });
