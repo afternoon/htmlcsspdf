@@ -49,7 +49,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
 
   const layout = useLayout();
   const { pdfUrl, error, rendering, render, clearError, isStale } = useRenderer();
-  const save = useDocumentSave(documentId ?? null, documentName ?? null);
+  const save = useDocumentSave(html, css, documentId ?? null, documentName ?? null);
   const toast = useToast();
 
   const applyFormatted = useCallback((next: Doc) => {
@@ -73,8 +73,9 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     void render(initial.html, initial.css);
   }, [render, initial]);
 
-  // Only unsaved work is drafted. A stored document already has a home, and
-  // drafting it would resurrect it over the next new document.
+  // Only unsaved work is drafted. A stored document already has a home — it
+  // saves itself as it is edited — and drafting it would resurrect it over the
+  // next new document.
   useEffect(() => {
     if (documentId) return;
     const timer = setTimeout(() => saveDraft({ html, css }), SAVE_DEBOUNCE_MS);
@@ -99,7 +100,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   }, [renderNow]);
 
   function handleSave() {
-    save.requestSave({ html, css });
+    save.requestSave();
   }
 
   /**
@@ -108,7 +109,8 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
    * Each file overwrites the pane it belongs to and leaves the other alone, so
    * dropping a stylesheet onto a document you are working on swaps the CSS
    * without touching the markup. There is no confirmation: the editor keeps
-   * its own undo history, and the save is still the user's to make.
+   * its own undo history, so a drop is undone like any other edit — and on a
+   * stored document, undoing it is written back the same way it was.
    */
   async function handleDrop(files: File[]) {
     const result = await readDrop(files);
@@ -159,7 +161,7 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
             onAutoFormatChange={autoFormat.setEnabled}
             formatting={autoFormat.formatting}
             onSave={handleSave}
-            saveState={save.stateFor({ html, css })}
+            saveState={save.state}
           />
         }
       >

@@ -78,11 +78,26 @@ from `getSchema` over the configured plugins, and
 checks the SQL against it — so a library upgrade that adds a column fails a
 test rather than a deploy.
 
+## Saving
+
+A document that exists saves itself. Once the editor is on `/d/<id>` and the
+user is signed in, a pause in typing writes the content — Save is then a way to
+store the work *now*, not the only way it is ever stored. Work that is not a
+document yet stays explicit: a draft has no id to write to and no owner to
+write it for, so `/` keeps its localStorage draft and its Save button, and
+signing in is what turns one into the other.
+
+The two halves of a save are paced differently. Content is a database row, so
+it is written on every pause; the preview image behind it is a browser render
+against a quota shared with the PDF output, so it is asked for separately once
+the editing has actually stopped (`POST /api/documents/<id>/thumbnail`). An
+auto-save therefore writes quietly — `capturePreview: false` — while pressing
+Save captures as it always did.
+
 ## Thumbnails
 
-Document cards show a preview captured by Browser Run at save time, stored in
-R2 and served back through the worker so ownership is checked before the bucket
-is touched.
+Document cards show a preview captured by Browser Run, stored in R2 and served
+back through the worker so ownership is checked before the bucket is touched.
 
 ```sh
 wrangler r2 bucket create htmlcsspdf-thumbnails
@@ -92,7 +107,13 @@ Capture runs *after* the save has been acknowledged, never as part of it.
 Browser Run is rate-limited and quota-bound, so it is the most likely thing
 here to fail — and a missing preview image must never turn a successful save
 into an error. A failed capture logs and leaves the card showing a placeholder
-until the next save succeeds.
+until the next capture succeeds.
+
+Every content write clears the stored capture, because it depicts content that
+no longer exists — a card showing a stale preview is worse than one showing
+none. The POST above renders the *stored* document rather than content supplied
+by the caller, and does nothing when the current revision has already been
+captured, so a repeated request costs no browser time.
 
 ## How it works
 
@@ -120,6 +141,8 @@ assets and dispatches server routes.
   on the server as the actual boundary.
 - `src/App.tsx` — three-pane UI, render lifecycle, draft persistence, error
   overlay, download and save buttons.
+- `src/useDocumentSave.ts` — the save interaction: auto-save for a stored
+  document, creation for a new one, and the sign-in round trip in between.
 - `src/EditableName.tsx` — the document name, in the header and on each card.
   Click to edit; Enter, blur or the Save name button commits, Escape abandons.
   Both states share every box-affecting property so the swap shifts nothing.
