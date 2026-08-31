@@ -3,7 +3,18 @@
   "name": "htmlcsspdf",
   "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-08-21",
-  "compatibility_flags": ["nodejs_compat"],
+  // `global_fetch_strictly_public` is what makes `/api/mcp` work in
+  // production. Verifying an access token reads the JWKS over HTTP —
+  // `@better-auth/mcp` fetches `${BETTER_AUTH_URL}/api/auth/jwks`, which is
+  // this same Worker — and by default a Worker's fetch to its own zone is
+  // routed to the zone's *origin server*, skipping every Worker mapped to the
+  // URL. There is no origin behind this hostname but the Worker itself, so
+  // that subrequest came back as a Cloudflare error page rather than a key
+  // set, and every authorized MCP call failed. The flag sends such a request
+  // back through Cloudflare's front door, where it reaches this Worker (the
+  // loop limit is 16 invocations; this is one). Nothing else here fetches its
+  // own origin, so that is the whole of the change.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   // Declared so `wrangler types` emits these bindings from the config rather
   // than inferring them from whatever `.dev.vars` happens to hold. Without it
   // the generated `worker-configuration.d.ts` — which is committed — depends on
