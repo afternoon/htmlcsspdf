@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { authPlugins } from "./authPlugins.ts";
 import { mcpResource } from "./mcpResource.ts";
+import { inferNativeClientRegistration } from "./nativeClientRegistration.ts";
 
 /**
  * Better Auth, built per request.
@@ -27,6 +28,12 @@ export function createAuth(env: Env) {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       },
+    },
+    hooks: {
+      // Reads an agent's `application_type` out of its redirect URIs, so a
+      // command-line client registering an http loopback callback is not
+      // refused as a malformed web app. See `nativeClientRegistration.ts`.
+      before: inferNativeClientRegistration,
     },
     advanced: {
       // Better Auth defers non-critical work — cleanup, timing-attack

@@ -255,6 +255,69 @@ describe("scopes decide what an agent is offered", () => {
   }, 60_000);
 });
 
+describe("a client running on somebody's machine can register itself", () => {
+  const LOOPBACK_CALLBACK = "http://localhost:60369/callback";
+
+  /**
+   * The registration a client that has not adopted SEP-837 sends, by hand.
+   *
+   * No `application_type` — RFC 7591 has no such field — and a loopback
+   * callback, because a client on a command line has nowhere else to receive
+   * the redirect. The provider defaults the absent field to `"web"`, whose
+   * redirect URIs must be https and non-loopback, so this exact body came back
+   * `400 invalid_redirect_uri` and no consent screen was ever reached.
+   *
+   * It is sent as raw HTTP rather than through the agent because the client
+   * SDK fills the field in itself: it derives the same value from the same
+   * URIs, so an SDK-driven flow cannot see this at all.
+   */
+  it("is not refused for holding a loopback callback", async () => {
+    const response = await fetch(`${baseUrl}/api/auth/oauth2/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "e2e-cli-agent",
+        redirect_uris: [LOOPBACK_CALLBACK],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+    });
+
+    const registered = (await response.json()) as {
+      client_id?: string;
+      application_type?: string;
+      error_description?: string;
+    };
+
+    expect(registered.error_description).toBeUndefined();
+    expect(response.status).toBe(201);
+    expect(registered.client_id).toBeTruthy();
+    // Recorded as what it is, rather than left as a web app the provider would
+    // later hold to https-only redirects.
+    expect(registered.application_type).toBe("native");
+  });
+
+  // The other half: a native registration has to survive everything after it.
+  // The provider re-checks the redirect URI when the authorization is issued
+  // and again at the token exchange, so a client registered this way could
+  // still fail there.
+  it("goes through the whole flow on that callback", async () => {
+    const agent = await connectAgent({
+      baseUrl,
+      cookie: alice.cookie,
+      redirectUrl: LOOPBACK_CALLBACK,
+    });
+
+    try {
+      const { tools } = await agent.client.listTools();
+      expect(tools.map((tool) => tool.name)).toContain("create_document");
+    } finally {
+      await agent.close();
+    }
+  }, 60_000);
+});
+
 describe("the endpoint serves one protocol revision", () => {
   it("turns away a 2025-era client rather than serving it", async () => {
     // `legacy: "reject"` in `api.mcp.ts`. Worth pinning because it has a real

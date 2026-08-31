@@ -39,6 +39,17 @@ export interface AgentOptions {
    * (the SDK unions), so a narrower grant has to be requested up front.
    */
   scope?: string;
+  /**
+   * The callback to register, for modelling a client that is not a web app.
+   *
+   * Defaults to an https URI. A client on a command line registers an http
+   * loopback one instead — `claude mcp add` uses
+   * `http://localhost:<port>/callback` — and the redirect URIs are the whole
+   * of what `application_type` is decided by, on both sides. So an agent that
+   * never varies this only ever exercises the web client's path through
+   * registration, authorization and the token exchange.
+   */
+  redirectUrl?: string;
 }
 
 /**
@@ -59,10 +70,11 @@ class ScriptedAuthProvider implements OAuthClientProvider {
   constructor(private readonly options: AgentOptions & { decision?: "allow" | "deny" }) {}
 
   // Never actually visited: the approval step intercepts the redirect. It must
-  // still be a URI the provider will register, and an https one avoids the
-  // loopback rules that apply to native clients.
+  // still be a URI the provider will register — https by default, which is
+  // what a web client registers; `redirectUrl` overrides it with the loopback
+  // callback a client running on somebody's machine uses.
   get redirectUrl() {
-    return "https://agent.e2e.test/callback";
+    return this.options.redirectUrl ?? "https://agent.e2e.test/callback";
   }
 
   get clientMetadata(): OAuthClientMetadata {
