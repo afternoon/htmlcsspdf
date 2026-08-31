@@ -17,6 +17,15 @@ Then open http://localhost:5173. The Cloudflare Vite plugin runs the server
 routes in the real Workers runtime, so the `BROWSER` and `DB` bindings work
 locally and both client and server code hot-reload — no build step in the loop.
 
+**Restart the dev server after a dependency changes.** Adding or removing a
+package while it is running makes Vite re-optimise its dependency pre-bundle,
+and the SSR module runner keeps modules from the previous one. The result is a
+server render that fails with something like `Cannot read properties of null
+(reading 'useState')` or ``(0 , __vite_ssr_import_1__.t) is not a function``,
+sometimes with a note about more than one copy of React. Nothing is wrong with
+the code — the page still hydrates on the client, which is what makes it easy
+to miss. Restart, or `rm -rf node_modules/.vite` if it persists.
+
 The editor works without any of the auth setup below; only saving needs it.
 
 ## Auth setup

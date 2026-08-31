@@ -51,7 +51,6 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   const { pdfUrl, error, rendering, render, clearError, isStale } = useRenderer();
   const save = useDocumentSave(documentId ?? null, documentName ?? null);
   const toast = useToast();
-  const drop = useFileDrop((files) => void handleDrop(files));
 
   const applyFormatted = useCallback((next: Doc) => {
     setHtml(next.html);
@@ -121,6 +120,12 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
     if (result.content.html !== undefined) setHtml(result.content.html);
     if (result.content.css !== undefined) setCss(result.content.css);
   }
+
+  // Declared after `handleDrop` rather than beside the other hooks: reading a
+  // function declaration before its statement runs is a use-before-init the
+  // React Compiler refuses to reason about, and it responds by skipping this
+  // component entirely rather than by failing.
+  const drop = useFileDrop((files) => void handleDrop(files));
 
   function handleDownload() {
     if (!pdfUrl) return;

@@ -20,7 +20,6 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
   // created, and two drops in one tick would both read a stale `useState`.
   const creating = useRef(false);
   const toast = useToast();
-  const drop = useFileDrop((files) => void handleDrop(files));
 
   async function handleRename(document: DocumentSummary, name: string) {
     setRenamingId(document.id);
@@ -63,25 +62,33 @@ export function DocumentsPage({ documents }: { documents: DocumentSummary[] }) {
     if (creating.current) return;
     creating.current = true;
 
+    // Released after the try rather than in a `finally`, which the React
+    // Compiler cannot yet analyse — it would skip optimising this component.
+    // The catch is broad and never rethrows, so the release is still reached
+    // on every path.
     try {
       const result = await readDrop(files);
       if (!result.ok) {
         toast.show(result.error);
-        return;
+      } else {
+        const id = await api.createDocument({
+          name: result.content.name,
+          html: result.content.html ?? "",
+          css: result.content.css ?? "",
+        });
+        await router.navigate({ to: "/d/$id", params: { id } });
       }
-
-      const id = await api.createDocument({
-        name: result.content.name,
-        html: result.content.html ?? "",
-        css: result.content.css ?? "",
-      });
-      await router.navigate({ to: "/d/$id", params: { id } });
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not create the document.");
-    } finally {
-      creating.current = false;
     }
+    creating.current = false;
   }
+
+  // Declared after `handleDrop` rather than beside the other hooks: reading a
+  // function declaration before its statement runs is a use-before-init the
+  // React Compiler refuses to reason about, and it responds by skipping this
+  // component entirely rather than by failing.
+  const drop = useFileDrop((files) => void handleDrop(files));
 
   return (
     <DropZone drop={drop} hint="Drop HTML or CSS files to start a document">
