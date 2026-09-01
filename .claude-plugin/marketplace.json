@@ -1,0 +1,14 @@
+{
+  "name": "htmlcsspdf",
+  "owner": {
+    "name": "Ben Godfrey"
+  },
+  "description": "The htmlcsspdf document tools, for agents that write PDFs.",
+  "plugins": [
+    {
+      "name": "htmlcsspdf",
+      "source": "./plugins/htmlcsspdf",
+      "description": "Write HTML and CSS, get a PDF. Create, read and edit documents in an htmlcsspdf account over MCP."
+    }
+  ]
+}

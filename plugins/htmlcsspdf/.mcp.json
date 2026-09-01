@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "htmlcsspdf": {
+      "type": "http",
+      "url": "https://htmlcsspdf.ben2.com/api/mcp"
+    }
+  }
+}

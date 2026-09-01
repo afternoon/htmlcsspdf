@@ -5,6 +5,57 @@ Google to save documents, or connect an agent over MCP to write them for you.
 
 Live at https://htmlcsspdf.ben2.com/
 
+## Installing the plugin
+
+The MCP server is packaged as a Claude Code plugin, in `plugins/htmlcsspdf`:
+
+```sh
+/plugin marketplace add afternoon/htmlcsspdf
+/plugin install htmlcsspdf@htmlcsspdf
+```
+
+The first tool call opens a browser to sign in and approve access. There is
+nothing to configure — no API key, no client id — because the endpoint answers
+an unauthenticated call with an RFC 9728 challenge and the client discovers
+registration, consent and the token exchange from there. See **MCP** below.
+
+Alongside the six tools, the plugin carries a skill for writing documents: that
+page size and margins come from an `@page` rule and nowhere else, and that
+saving runs an element allowlist which drops rather than escapes — no `<script>`,
+no `<form>`, and no `<svg>`, which is the one that catches people out.
+
+To run it against a dev server, point `plugins/htmlcsspdf/.mcp.json` at
+`http://localhost:5173/api/mcp` and load it directly, without installing:
+
+```sh
+claude --plugin-dir ./plugins/htmlcsspdf
+```
+
+The OAuth flow accepts plain HTTP on loopback, so it works the same way there.
+
+## Connecting from claude.ai
+
+Plugins are a Claude Code feature, but the server underneath one is an ordinary
+remote MCP endpoint, so claude.ai can reach it directly. Under **Settings →
+Connectors**, choose **Add custom connector** and give it the URL:
+
+```
+https://htmlcsspdf.ben2.com/api/mcp
+```
+
+Leave the client id and secret blank. Registration here is open, so Claude
+registers itself on first connect (RFC 7591) and the browser takes you through
+the same sign-in and consent screen. Adding it on the web is enough for the
+desktop and mobile apps too — connectors follow the account, and the mobile
+apps cannot add one themselves.
+
+Two differences from the plugin are worth knowing. The `writing-documents`
+skill does not come with it, because a connector carries tools and nothing
+else; on claude.ai you get the six tools, and the `@page` rule and the
+sanitiser's allowlist are things you will have to say yourself. And a connector
+must be https with a public hostname, so a local dev server cannot be reached
+this way — that is what `--plugin-dir` above is for.
+
 ## Running
 
 ```sh
@@ -162,7 +213,9 @@ assets and dispatches server routes.
 `POST /api/mcp` exposes the document API to agents, so an assistant can write a
 document on someone's behalf. It speaks MCP 2026-07-28, and 2025-era clients
 are served too — `legacy: "stateless"`, the SDK's own fallback over the same
-server factory.
+server factory. `plugins/htmlcsspdf` packages it for Claude Code, and claude.ai
+reaches the same endpoint as a custom connector; see **Installing the plugin**
+and **Connecting from claude.ai** above.
 
 Six tools, each a thin call into `src/server/documents.ts`: `list_documents`,
 `get_document`, `create_document`, `update_document`, `rename_document`,
