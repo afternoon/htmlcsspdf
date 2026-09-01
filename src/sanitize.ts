@@ -14,6 +14,10 @@ import type { Issue } from "./document.ts";
  * discloses nothing the author does not already possess. What must never
  * survive is anything that can run script.
  *
+ * Two namespaces are allowlisted, HTML and SVG, each with its own element and
+ * attribute sets. They are kept separate because a name means different things
+ * in each — see `isAllowedElement`. Anything in a third namespace is dropped.
+ *
  * Plain module: no framework imports, so it runs identically in the editor and
  * in the Worker. The editor's copy is advisory; the server's is the boundary.
  */
@@ -23,6 +27,7 @@ type ParentNode = DefaultTreeAdapterMap["parentNode"];
 type Element = DefaultTreeAdapterMap["element"];
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
  * Elements permitted in a document. Semantic content only: things that carry
@@ -105,6 +110,149 @@ const ALLOWED_ELEMENTS = new Set([
   "del",
   // Media.
   "img",
+  // `svg` is deliberately absent: parse5 puts it in the SVG namespace, so it
+  // is allowed by SVG_ELEMENTS below rather than here.
+]);
+
+/**
+ * SVG elements permitted in a document, for static vector graphics — icons,
+ * logos, diagrams.
+ *
+ * Names are as parse5 emits them: it applies the HTML spec's SVG case
+ * adjustment during tree construction, so `<CLIPPATH>` in the source arrives
+ * here as `clipPath`. Matching is therefore case-sensitive, unlike HTML.
+ *
+ * Absent by design:
+ *
+ * - `script`, and the `animate`/`set` family, which carry event attributes.
+ * - `foreignObject`, the integration point where HTML parsing resumes inside
+ *   SVG. Allowing it would let HTML re-enter through a subtree this allowlist
+ *   does not govern, which is precisely the hole the namespace split closes.
+ * - `a`. SVG's link element is a different element from HTML's with different
+ *   attribute handling, and a document icon has no need of it.
+ * - `style`, matching the HTML side: authors have a dedicated CSS pane, and a
+ *   `<style>` inside SVG is another place for a `</style>` breakout to hide.
+ */
+const SVG_ELEMENTS = new Set([
+  // Root and structure.
+  "svg",
+  "g",
+  "defs",
+  "symbol",
+  "use",
+  "title",
+  "desc",
+  // Shapes.
+  "path",
+  "rect",
+  "circle",
+  "ellipse",
+  "line",
+  "polyline",
+  "polygon",
+  // Text.
+  "text",
+  "tspan",
+  // Paint servers and masking.
+  "linearGradient",
+  "radialGradient",
+  "stop",
+  "clipPath",
+  "mask",
+  "pattern",
+  // Raster content, subject to the same URL rules as <img>.
+  "image",
+]);
+
+/**
+ * Attributes permitted on SVG elements.
+ *
+ * A single set rather than a per-element map: SVG presentation attributes are
+ * genuinely global — `fill` is as meaningful on `<g>` as on `<path>` — and a
+ * per-element split would be a large table that buys no safety, since none of
+ * these can execute. The safety comes from the element allowlist above and
+ * from `href` being URL-checked like any other.
+ *
+ * `style` is absent for the same reason as in the HTML set. Event handlers are
+ * absent too, and `isAllowedAttribute`'s `on*` guard backs that up.
+ */
+const SVG_ATTRIBUTES = new Set([
+  // Identity and grouping.
+  "id",
+  "class",
+  "lang",
+  // Geometry.
+  "d",
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "width",
+  "height",
+  "points",
+  "dx",
+  "dy",
+  "transform",
+  "viewBox",
+  "preserveAspectRatio",
+  "xmlns",
+  // Paint.
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "clip-rule",
+  "clip-path",
+  "mask",
+  "stroke",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-opacity",
+  "stroke-miterlimit",
+  "opacity",
+  "color",
+  // Gradients.
+  "offset",
+  "stop-color",
+  "stop-opacity",
+  "gradientUnits",
+  "gradientTransform",
+  "spreadMethod",
+  // Units for masking and patterns.
+  "clipPathUnits",
+  "maskUnits",
+  "maskContentUnits",
+  "patternUnits",
+  "patternContentUnits",
+  "patternTransform",
+  // Text.
+  "text-anchor",
+  "dominant-baseline",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "letter-spacing",
+  "word-spacing",
+  // References. URL-checked like every other URL attribute; `xlink:href`
+  // arrives from parse5 with this same `name` and an xlink prefix, so both
+  // spellings are covered by the one entry.
+  "href",
+  // Presentational, but authors reach for them and they cannot execute.
+  "visibility",
+  "display",
+  "overflow",
+  "vector-effect",
+  "paint-order",
 ]);
 
 /**
@@ -148,6 +296,12 @@ const ALLOWED_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:", "data:"])
  * A `data:image/` prefix test would be too loose: `image/svg+xml` matches it,
  * and SVG is a document format that can carry script and its own event
  * handlers. Navigating to such a URL executes it. Raster formats cannot.
+ *
+ * This holds even though inline `<svg>` is now allowed. Inline SVG is parsed
+ * into the tree and passes through the allowlist element by element; an SVG
+ * hidden in a base64 `data:` URL is opaque to the sanitiser, and admitting it
+ * would mean decoding and re-sanitising a nested document. Authors who want
+ * vector graphics write them inline, where they can be checked.
  */
 const ALLOWED_DATA_PREFIXES = [
   "data:image/png",
@@ -186,15 +340,21 @@ function isSafeUrl(value: string): boolean {
   return true;
 }
 
-function isAllowedAttribute(tagName: string, attrName: string): boolean {
+function isAllowedAttribute(el: Element, attrName: string): boolean {
   const name = attrName.toLowerCase();
   // Every `on*` attribute is an event handler. The allowlists below already
   // exclude them, so this is redundant today and no test can distinguish its
   // removal — it is kept as a standing guard for the day someone widens an
   // element's attribute set and does not think about event handlers.
   if (name.startsWith("on")) return false;
+
+  // SVG attributes are matched case-sensitively against the name parse5
+  // produced, because SVG has camelCase attributes (`viewBox`) that are
+  // distinct from their lowercase spelling.
+  if (el.namespaceURI === SVG_NS) return SVG_ATTRIBUTES.has(attrName);
+
   if (GLOBAL_ATTRIBUTES.has(name)) return true;
-  return ELEMENT_ATTRIBUTES[tagName]?.has(name) ?? false;
+  return ELEMENT_ATTRIBUTES[el.tagName.toLowerCase()]?.has(name) ?? false;
 }
 
 function isElement(node: Node): node is Element {
@@ -206,17 +366,24 @@ function hasChildNodes(node: Node): node is ParentNode {
 }
 
 /**
- * An element is kept only if it is allowlisted *and* in the HTML namespace.
+ * An element is kept only if its name is allowlisted *for its own namespace*.
  *
- * In practice the name check alone does the work, because parse5 only produces
- * foreign-namespace elements underneath a foreign root (`svg`, `math`) that is
- * itself not allowlisted and already dropped with its subtree. The namespace
- * test guards the case where that stops being true — an allowlisted name such
- * as `a` or `title` also exists in SVG, with different parsing and different
- * attributes, and must never be treated as its HTML namesake.
+ * The namespace is load-bearing, not a formality. Several names exist in both
+ * HTML and SVG — `title`, `a`, `style`, `image`/`img` — with different parsing
+ * rules and different attributes, so a name alone cannot say whether an
+ * element is safe. Dispatching on namespace is what keeps SVG's `title` from
+ * being mistaken for the HTML one, and what stops `foreignObject` from
+ * smuggling HTML back in through a subtree the HTML allowlist never sees.
+ *
+ * MathML has no allowlist at all and so is dropped wholesale: it has its own
+ * script vectors, and nothing in a print document needs it.
  */
 function isAllowedElement(el: Element): boolean {
-  return el.namespaceURI === HTML_NS && ALLOWED_ELEMENTS.has(el.tagName.toLowerCase());
+  if (el.namespaceURI === HTML_NS) return ALLOWED_ELEMENTS.has(el.tagName.toLowerCase());
+  // parse5 applies the SVG case adjustment during tree construction, so the
+  // tag name is already in its canonical form (`clipPath`, `foreignObject`).
+  if (el.namespaceURI === SVG_NS) return SVG_ELEMENTS.has(el.tagName);
+  return false;
 }
 
 /**
@@ -251,10 +418,9 @@ function scrub(node: Node, depth = 0): void {
         // is exactly the payload the namespace check exists to remove.
         continue;
       }
-      const tagName = child.tagName.toLowerCase();
       child.attrs = child.attrs.filter(
         (attr) =>
-          isAllowedAttribute(tagName, attr.name) &&
+          isAllowedAttribute(child, attr.name) &&
           (!URL_ATTRIBUTES.has(attr.name.toLowerCase()) || isSafeUrl(attr.value)),
       );
     }
@@ -328,7 +494,7 @@ export function findDisallowedMarkup(html: string): Issue[] {
 
       for (const attr of node.attrs) {
         const name = attr.name.toLowerCase();
-        if (!isAllowedAttribute(tagName, name)) {
+        if (!isAllowedAttribute(node, attr.name)) {
           issues.push({
             source: "html",
             message: `The ${name} attribute is not allowed`,

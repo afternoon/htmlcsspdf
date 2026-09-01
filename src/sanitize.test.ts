@@ -122,31 +122,53 @@ describe("sanitizeHtml", () => {
       expect(sanitizeHtml('<base href="https://evil.test/">')).not.toMatch(/<base/i);
     });
 
-    it("neutralises svg and mathml, which have their own script vectors", () => {
+    it("strips the script vectors inside an otherwise permitted svg", () => {
+      // SVG is allowed for static graphics, so these payloads now arrive
+      // inside a root that survives. The element allowlist has to remove them
+      // on their own merits rather than relying on the root being dropped.
       expectInert("<svg><script>alert(1)</script></svg>");
       expectInert('<svg><animate onbegin="alert(1)" attributeName="x"></animate></svg>');
+      expectInert('<svg><set onbegin="alert(1)" attributeName="x"></set></svg>');
+      expectInert('<svg><path d="M0 0" onload="alert(1)"></path></svg>');
+    });
+
+    it("removes mathml, which has its own script vectors", () => {
+      // MathML has no allowlist, so it goes wholesale — nothing in a print
+      // document needs it.
       expectInert("<math><mtext><script>alert(1)</script></mtext></math>");
+      expect(sanitizeHtml("<math><mtext>x</mtext></math>")).toBe("");
     });
 
     it("drops same-named elements reached through foreign content", () => {
-      // SVG defines its own `a`, and `foreignObject` is an integration point
-      // where HTML parsing resumes mid-SVG. Both are removed here because
-      // their `svg` root is not allowlisted — the namespace check in
-      // isAllowedElement is a second line of defence for a shape parse5's tree
-      // construction does not actually produce, since a foreign element always
-      // sits under a foreign root that has already been dropped.
+      // SVG defines its own `a`, distinct from HTML's, and it is not in the
+      // SVG allowlist — so it goes even though its `svg` root now stays.
       const clean = expectInert('<svg><a href="javascript:alert(1)">x</a></svg>');
       expect(clean).not.toMatch(/<a[\s>]/i);
-      expect(
-        sanitizeHtml(
-          '<svg><foreignObject><a href="javascript:alert(1)">x</a></foreignObject></svg>',
-        ),
-      ).toBe("");
+
+      // `foreignObject` is the integration point where HTML parsing resumes
+      // mid-SVG. Excluding it is what stops HTML re-entering through a subtree
+      // the HTML allowlist never governs.
+      const fo = sanitizeHtml(
+        '<svg><foreignObject><a href="javascript:alert(1)">x</a></foreignObject></svg>',
+      );
+      expect(fo).not.toMatch(/foreignObject/i);
+      expect(fo).not.toMatch(/<a[\s>]/i);
 
       // Content after a foreign subtree is unaffected.
       expect(
         sanitizeHtml('<p><svg></svg><a href="https://ok.test">after</a></p>'),
       ).toContain("https://ok.test");
+    });
+
+    it("keeps svg title distinct from the html element of the same name", () => {
+      // Both namespaces define `title`. The SVG one is an accessible label on
+      // the graphic; it must not be treated as the HTML document title, and
+      // must not pick up HTML's attribute set.
+      const clean = sanitizeHtml(
+        '<svg><title lang="en" href="javascript:alert(1)">Icon</title></svg>',
+      );
+      expect(clean).toContain("Icon");
+      expect(clean).not.toMatch(/javascript:/i);
     });
 
     it("resists mutation-XSS via malformed nesting", () => {
@@ -233,6 +255,128 @@ describe("sanitizeHtml", () => {
       expect(clean).toContain("example.com/logo.png");
       expect(clean).toContain('class="total"');
       expect(clean).toContain("10.00");
+    });
+  });
+
+  describe("svg", () => {
+    /** A social-profile icon of the shape icon sets actually ship. */
+    const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><title>GitHub</title><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61"/></svg>`;
+
+    it("keeps a realistic icon intact", () => {
+      const clean = sanitizeHtml(icon);
+      expect(clean).toContain("<svg");
+      expect(clean).toContain('viewBox="0 0 24 24"');
+      expect(clean).toContain('stroke-linecap="round"');
+      expect(clean).toContain("<title>GitHub</title>");
+      expect(clean).toContain("<path");
+      expect(clean).toContain("M9 19c-5 1.5-5-2.5-7-3");
+    });
+
+    it("keeps an icon embedded in document content", () => {
+      const clean = sanitizeHtml(
+        `<p>Find me on <a href="https://github.test">${icon} GitHub</a></p>`,
+      );
+      expect(clean).toContain("<svg");
+      expect(clean).toContain("github.test");
+      expect(clean).toContain("</p>");
+    });
+
+    it("keeps the shape, text and gradient elements a graphic needs", () => {
+      const clean = sanitizeHtml(
+        `<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0" stop-color="#fff"></stop></linearGradient><clipPath id="c"><rect x="0" y="0" width="4" height="4"></rect></clipPath></defs><g transform="translate(1,1)" clip-path="url(#c)"><circle cx="2" cy="2" r="1" fill="url(#g)"></circle><ellipse cx="1" cy="1" rx="2" ry="3"></ellipse><line x1="0" y1="0" x2="5" y2="5"></line><polyline points="0,0 1,1"></polyline><polygon points="0,0 1,1 2,0"></polygon><text x="1" y="2" font-size="3" text-anchor="middle">hi<tspan dx="1">there</tspan></text></g></svg>`,
+      );
+      for (const tag of [
+        "defs",
+        "linearGradient",
+        "stop",
+        "clipPath",
+        "rect",
+        "g",
+        "circle",
+        "ellipse",
+        "line",
+        "polyline",
+        "polygon",
+        "text",
+        "tspan",
+      ]) {
+        expect(clean, tag).toContain(`<${tag}`);
+      }
+      expect(clean).toContain("there");
+    });
+
+    it("preserves camelCase attribute and element names", () => {
+      // SVG is case-sensitive where HTML is not: `viewBox` is not `viewbox`,
+      // and lowercasing either would silently break the graphic.
+      const clean = sanitizeHtml(
+        '<svg viewBox="0 0 8 8" preserveAspectRatio="xMidYMid meet"><clipPath clipPathUnits="userSpaceOnUse"><rect width="1" height="1"></rect></clipPath></svg>',
+      );
+      expect(clean).toContain("viewBox=");
+      expect(clean).toContain("preserveAspectRatio=");
+      expect(clean).toContain("clipPath");
+      expect(clean).toContain("clipPathUnits=");
+    });
+
+    it("accepts the case the author wrote, since parse5 adjusts it", () => {
+      const clean = sanitizeHtml('<SVG VIEWBOX="0 0 4 4"><PATH D="M0 0"/></SVG>');
+      expect(clean).toContain("<svg");
+      expect(clean).toContain("viewBox=");
+      expect(clean).toContain("<path");
+      expect(clean).toContain('d="M0 0"');
+    });
+
+    it("strips attributes that are not in the svg allowlist", () => {
+      const clean = sanitizeHtml(
+        '<svg viewBox="0 0 4 4"><path d="M0 0" style="fill:red" requiredExtensions="x"></path></svg>',
+      );
+      expect(clean).toContain('d="M0 0"');
+      expect(clean).not.toMatch(/style=/i);
+      expect(clean).not.toMatch(/requiredExtensions/i);
+    });
+
+    it("url-checks href in both its spellings", () => {
+      // parse5 reports `xlink:href` with the same attribute name as `href`, so
+      // one allowlist entry and one URL check cover both.
+      const clean = expectInert(
+        '<svg><use xlink:href="javascript:alert(1)"></use><use href="javascript:alert(1)"></use></svg>',
+      );
+      expect(clean).not.toMatch(/javascript:/i);
+
+      const ok = sanitizeHtml('<svg><use href="#icon"></use></svg>');
+      expect(ok).toContain('href="#icon"');
+    });
+
+    it("allows image inside svg under the same url rules as img", () => {
+      const clean = sanitizeHtml(
+        '<svg><image href="https://ok.test/a.png" width="4" height="4"></image></svg>',
+      );
+      expect(clean).toContain("ok.test/a.png");
+      expect(
+        expectInert('<svg><image href="javascript:alert(1)"></image></svg>'),
+      ).not.toMatch(/javascript:/i);
+    });
+
+    it("still refuses an svg data url, which the allowlist cannot inspect", () => {
+      // Inline SVG is checked element by element; an SVG inside a base64
+      // data: URL is opaque, so it stays out even now that inline SVG is in.
+      const clean = sanitizeHtml(
+        '<img src="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+">',
+      );
+      expect(clean).not.toMatch(/data:image\/svg/i);
+    });
+
+    it("drops svg nested inside a disallowed element", () => {
+      expect(sanitizeHtml("<script><svg><path d='M0 0'/></svg></script>")).not.toMatch(
+        /<svg/i,
+      );
+    });
+
+    it("keeps a nested svg, which is legal in a graphic", () => {
+      const clean = sanitizeHtml(
+        '<svg viewBox="0 0 9 9"><svg x="1"><rect width="1" height="1"></rect></svg></svg>',
+      );
+      expect(clean.match(/<svg/gi)).toHaveLength(2);
+      expect(clean).toContain("<rect");
     });
   });
 

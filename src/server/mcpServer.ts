@@ -92,7 +92,11 @@ export function buildMcpServer({ userId, scopes }: McpServerOptions): McpServer 
         "Documents are HTML plus CSS, rendered to PDF by htmlcsspdf. Page size " +
         "and margins come from an @page rule in the CSS; there is no other page " +
         "setup. Script, iframe, form, link and event-handler attributes are " +
-        "stripped on save — write document content, not an application.",
+        "stripped on save — write document content, not an application. Inline " +
+        "<svg> is allowed for static graphics such as icons and logos: shapes, " +
+        "text, gradients, clips and masks. Inside it, script, animation, <a>, " +
+        "<style> and <foreignObject> are stripped, as are data:image/svg+xml " +
+        "URLs — write the SVG inline so it can be checked.",
     },
   );
 
