@@ -84,8 +84,28 @@ time data wbr blockquote pre figure figcaption address ins del img
 ```
 
 So there is no `<script>`, `<iframe>`, `<form>`, `<input>`, `<button>`,
-`<video>`, `<audio>`, `<canvas>` — and **no `<svg>`**, which is the one that
-catches people out. Draw with CSS, or use a raster image.
+`<video>`, `<audio>` or `<canvas>`.
+
+Inline `<svg>` **is** allowed, as a static-graphics subset — for icons, logos
+and simple diagrams:
+
+```
+svg g defs symbol use title desc
+path rect circle ellipse line polyline polygon
+text tspan
+linearGradient radialGradient stop clipPath mask pattern image
+```
+
+Inside SVG there is no `<script>`, no `<animate>`/`<set>`, no `<a>`, no
+`<style>` and no `<foreignObject>`. Presentation attributes (`fill`, `stroke`,
+`stroke-width`, `transform`, `viewBox`, `d`, `points`, the geometry and gradient
+attributes, and the `font-*`/`text-anchor` text attributes) are kept; `style` is
+not. SVG names are **case-sensitive** — write `viewBox` and `clipPath`, not
+`viewbox` or `clippath`. `href` and `xlink:href` are scheme-checked like any
+other URL, so keep `<use>` on same-document references such as `href="#icon"`.
+
+Paste icon SVGs inline rather than linking them: a `data:image/svg+xml` URL is
+rejected, because only inline SVG can be checked element by element.
 
 Attributes are an allowlist too. Globally: `class`, `id`, `title`, `lang`,
 `dir`. Per element: `href`/`target`/`rel` on `a`; `src`/`alt`/`width`/`height`/
@@ -97,7 +117,8 @@ stripped — styling belongs in the CSS pane.
 
 URLs are checked by scheme: `http:`, `https:`, `mailto:`, `tel:` and `data:`
 are allowed. A `data:` URL must be a raster image (`png`, `jpeg`, `jpg`, `gif`,
-`webp`, `avif`, `bmp`) — `data:image/svg+xml` is rejected along with the rest.
+`webp`, `avif`, `bmp`) — `data:image/svg+xml` is rejected, so write vector
+graphics as inline `<svg>` instead.
 
 The CSS pane is a stylesheet, not markup: it needs no `<style>` wrapper, and
 `@page`, `@media print`, custom properties and web fonts all work normally.

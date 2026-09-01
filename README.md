@@ -22,7 +22,8 @@ registration, consent and the token exchange from there. See **MCP** below.
 Alongside the six tools, the plugin carries a skill for writing documents: that
 page size and margins come from an `@page` rule and nowhere else, and that
 saving runs an element allowlist which drops rather than escapes — no `<script>`,
-no `<form>`, and no `<svg>`, which is the one that catches people out.
+no `<form>`, and inline `<svg>` only as static graphics, which is the one that
+catches people out.
 
 To run it against a dev server, point `plugins/htmlcsspdf/.mcp.json` at
 `http://localhost:5173/api/mcp` and load it directly, without installing:
@@ -415,10 +416,22 @@ The rule is **no code execution**, not no network access:
 - **Allowed** — semantic document content, tables, and images and fonts from
   any host. The render browser holds no credentials and runs in a per-render
   incognito context, so an outbound fetch discloses nothing the author does not
-  already have.
+  already have. Also inline `<svg>`, as a static-graphics subset: shapes, text,
+  gradients, clips and masks, for icons and logos.
 - **Blocked** — `script`, `iframe`, `object`, `embed`, `form`, `link`, `base`,
   every `on*` attribute, `javascript:` URLs, and `data:` URLs that are not
   raster images (`data:image/svg+xml` can carry script).
+- **Blocked inside SVG** — `script`, the `animate`/`set` family, SVG's own `a`
+  and `style`, and `foreignObject`, the integration point where HTML parsing
+  resumes mid-SVG.
+
+The allowlist is keyed on **namespace**, not just tag name, because several
+names exist in both HTML and SVG — `title`, `a`, `style`, `image` — with
+different parsing rules and different attributes. SVG matching is also
+case-sensitive, since `viewBox` is not `viewbox`. Inline SVG is admitted where a
+`data:image/svg+xml` URL is not for one reason: inline SVG is parsed into the
+tree and checked element by element, while an SVG inside a base64 URL is opaque
+to the sanitiser.
 
 The editor reports what would be removed so authors are not left guessing, but
 that check is advisory: the server sanitises on render *and* on save, so
