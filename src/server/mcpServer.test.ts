@@ -115,6 +115,9 @@ async function aliceDocument(): Promise<string> {
 beforeEach(() => {
   resetWorkersStub();
   env.DB = createTestDb().db;
+  // The origin document URLs are built from — the same one the OAuth issuer
+  // and the MCP resource identifier come from in production.
+  env.BETTER_AUTH_URL = "https://htmlcsspdf.test";
   // Thumbnail capture is handed to `waitUntil` and never awaited, so a stub
   // that does nothing is what an unavailable Browser Run looks like.
   env.THUMBNAILS = { delete: async () => {} } as unknown as R2Bucket;
@@ -131,6 +134,55 @@ describe("what a tool asks for", () => {
 
     expect(await alice.toolInputs("update_document")).toEqual(["css", "html", "id"]);
 
+    await alice.close();
+  });
+});
+
+describe("a document's URL travels with it", () => {
+  it("hands back the URL of a document it has just created", async () => {
+    const alice = await connect(ALICE, READ_WRITE);
+    const created = await alice.call("create_document", DOC);
+
+    const { id, url } = JSON.parse(created.text) as { id: string; url: string };
+    // The link a person can open, not one an agent had to assemble from an id.
+    expect(url).toBe(`https://htmlcsspdf.test/d/${id}`);
+
+    await alice.close();
+  });
+
+  it("carries the URL on a document it reads back", async () => {
+    const id = await aliceDocument();
+
+    const alice = await connect(ALICE, READ_ONLY);
+    expect(JSON.parse((await alice.call("get_document", { id })).text).url).toBe(
+      `https://htmlcsspdf.test/d/${id}`,
+    );
+    await alice.close();
+  });
+
+  it("carries a URL for every document it lists", async () => {
+    const id = await aliceDocument();
+
+    const alice = await connect(ALICE, READ_ONLY);
+    const { documents } = JSON.parse((await alice.call("list_documents", {})).text) as {
+      documents: { id: string; url: string }[];
+    };
+    expect(documents.map((document) => document.url)).toEqual([
+      `https://htmlcsspdf.test/d/${id}`,
+    ]);
+    await alice.close();
+  });
+
+  it("does not fold a trailing slash on the configured origin into the path", async () => {
+    // Set by hand at deploy time, so it arrives however whoever typed it left
+    // it; `https://host//d/x` is not the URL this app serves.
+    env.BETTER_AUTH_URL = "https://htmlcsspdf.test/";
+    const id = await aliceDocument();
+
+    const alice = await connect(ALICE, READ_ONLY);
+    expect(JSON.parse((await alice.call("get_document", { id })).text).url).toBe(
+      `https://htmlcsspdf.test/d/${id}`,
+    );
     await alice.close();
   });
 });

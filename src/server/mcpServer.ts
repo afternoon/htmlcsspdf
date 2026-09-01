@@ -6,6 +6,7 @@ import {
   SaveDocumentSchema,
   UpdateDocumentSchema,
 } from "../documentsApi.ts";
+import { documentUrl } from "./appUrl.ts";
 import {
   createDocument,
   deleteDocument,
@@ -29,6 +30,13 @@ import { captureThumbnail, thumbnailKey } from "./thumbnails.ts";
  * A server is built per request, from one verified access token, so `userId`
  * is a closed-over constant rather than an argument a tool could be made to
  * pass wrongly.
+ *
+ * The one thing the tools add to what `documents.ts` returns is `url`: where a
+ * person opens the document in a browser. An agent that has just written a
+ * document is usually about to tell someone about it, and a link it composed
+ * from an id is a link it guessed. It is a field on every result that names a
+ * document rather than a seventh tool, so getting it costs no round trip and
+ * an agent cannot hold an id without also holding the URL for it.
  */
 
 /** Documents are addressed by the id the create tool handed back. */
@@ -92,12 +100,19 @@ export function buildMcpServer({ userId, scopes }: McpServerOptions): McpServer 
     "list_documents",
     {
       title: "List documents",
-      description: "List the user's documents, most recently updated first.",
+      description:
+        "List the user's documents, most recently updated first. Each carries " +
+        "its id and the URL a person opens it at.",
       annotations: { readOnlyHint: true },
     },
     async () => {
       const documents = await listDocuments(env.DB, userId);
-      return data({ documents });
+      return data({
+        documents: documents.map((document) => ({
+          ...document,
+          url: documentUrl(env, document.id),
+        })),
+      });
     },
   );
 
@@ -105,7 +120,7 @@ export function buildMcpServer({ userId, scopes }: McpServerOptions): McpServer 
     "get_document",
     {
       title: "Get a document",
-      description: "Read one document's HTML and CSS.",
+      description: "Read one document's HTML and CSS, and the URL it opens at.",
       inputSchema: DocumentIdSchema,
       annotations: { readOnlyHint: true },
     },
@@ -114,7 +129,7 @@ export function buildMcpServer({ userId, scopes }: McpServerOptions): McpServer 
       if (!document) return failure(NOT_FOUND);
 
       const { name, html, css, updatedAt } = document;
-      return data({ id, name, html, css, updatedAt });
+      return data({ id, name, url: documentUrl(env, id), html, css, updatedAt });
     },
   );
 
@@ -126,14 +141,14 @@ export function buildMcpServer({ userId, scopes }: McpServerOptions): McpServer 
       title: "Create a document",
       description:
         "Create a document from HTML and CSS. Returns its id, which the other " +
-        "tools take.",
+        "tools take, and the URL a person opens it at.",
       inputSchema: SaveDocumentSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async ({ name, html, css }) => {
       const { id, revision } = await createDocument(env.DB, userId, { name, html, css });
       captureInBackground(id, userId, html, css, revision);
-      return data({ id, name });
+      return data({ id, name, url: documentUrl(env, id) });
     },
   );
 
