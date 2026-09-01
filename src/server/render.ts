@@ -1,4 +1,4 @@
-import type { ActiveSession, Browser, BrowserWorker, Page } from "@cloudflare/puppeteer";
+import type { Browser, BrowserWorker, Page } from "@cloudflare/puppeteer";
 import puppeteer from "@cloudflare/puppeteer";
 import { sanitizeCss, sanitizeHtml } from "../sanitize.ts";
 
@@ -6,43 +6,57 @@ import { sanitizeCss, sanitizeHtml } from "../sanitize.ts";
  * Browser Run access: acquiring a session, and running one page in isolation.
  *
  * Shared by the PDF route and thumbnail capture so both get the same isolation
- * and the same session reuse — a second copy of this would be a second place
- * for the isolation rules to drift.
+ * and the same lifecycle — a second copy of this would be a second place for
+ * the rules to drift.
  */
 
-/** Keep the browser warm between renders so a 1s debounce doesn't hit the
- *  free plan's "1 new instance per 20s" limit. Max allowed is 10 minutes. */
-const KEEP_ALIVE_MS = 600_000;
+/**
+ * How long a session may idle before Browser Run reclaims it.
+ *
+ * Sessions used to be kept warm for the full ten minutes and handed back with
+ * `disconnect()`, on the theory that reuse would keep a 1s debounce under the
+ * free plan's "one new instance per 20s" limit. That trade is wrong for this
+ * tool: usage is a handful of bursty requests, so a warm session spends
+ * browser-minutes idling far more often than it saves a launch. Sessions are
+ * now closed as soon as the work that needed one is done, and this is only a
+ * backstop for a session orphaned by an isolate that died mid-render.
+ */
+const KEEP_ALIVE_MS = 60_000;
 export const NAV_TIMEOUT_MS = 20_000;
 
 /** A4 at 96dpi. Only used to give screenshots a page-shaped viewport. */
 export const PAGE_WIDTH_PX = 794;
 export const PAGE_HEIGHT_PX = 1123;
 
-/** Pick an existing session nobody is connected to. */
-async function getFreeSession(endpoint: BrowserWorker): Promise<string | undefined> {
+/**
+ * Run `use` against a browser session, and close the session afterwards.
+ *
+ * Closing rather than disconnecting is the point. Browser Run bills for the
+ * time a session exists, not for the time something is attached to it, so a
+ * disconnected-but-live session keeps spending the quota that the next PDF
+ * depends on. Every caller therefore gets the session for exactly the span of
+ * its own work.
+ *
+ * That makes the *shape* of a caller matter: everything a request needs from
+ * the browser has to happen inside one `use`, because there is no warm session
+ * waiting for a second call. `withBrowser` is what lets the PDF route capture
+ * a thumbnail on the session it already has.
+ */
+export async function withBrowser<T>(
+  endpoint: BrowserWorker,
+  use: (browser: Browser) => Promise<T>,
+): Promise<T> {
+  const browser = await puppeteer.launch(endpoint, { keep_alive: KEEP_ALIVE_MS });
   try {
-    const sessions: ActiveSession[] = await puppeteer.sessions(endpoint);
-    const free = sessions.filter((s) => !s.connectionId).map((s) => s.sessionId);
-    if (free.length === 0) return undefined;
-    return free[Math.floor(Math.random() * free.length)];
-  } catch (e) {
-    console.log(`sessions() failed: ${e}`);
-    return undefined;
+    return await use(browser);
+  } finally {
+    // close(), not disconnect(): ends the session and stops the meter. Failing
+    // to close is not worth surfacing over the caller's own result — but it
+    // does mean a session is left to idle out, so it is logged.
+    await browser.close().catch((e: unknown) => {
+      console.log(`browser close failed: ${e}`);
+    });
   }
-}
-
-export async function acquireBrowser(endpoint: BrowserWorker): Promise<Browser> {
-  const sessionId = await getFreeSession(endpoint);
-  if (sessionId) {
-    try {
-      return await puppeteer.connect(endpoint, sessionId);
-    } catch (e) {
-      // Session died between listing and connecting; fall through to launch.
-      console.log(`connect(${sessionId}) failed: ${e}`);
-    }
-  }
-  return await puppeteer.launch(endpoint, { keep_alive: KEEP_ALIVE_MS });
 }
 
 export function buildDocument(html: string, css: string): string {
@@ -80,9 +94,10 @@ ${safeHtml}
  *
  * 1. A fresh browser *context* per render. Cookies, localStorage, cache and
  *    service workers are context-scoped, not page-scoped, so `page.close()`
- *    alone leaves them behind — and sessions are reused across users by
- *    design, to stay under the rate limit. Without this, one user's document
- *    could plant a cookie or poison the cache for another's.
+ *    alone leaves them behind. A session no longer outlives the request that
+ *    launched it, but it still serves more than one render within it — the
+ *    PDF and then the preview image — and each must start from nothing, so
+ *    that a document cannot plant state that the next render reads back.
  *
  * 2. JavaScript disabled. `setContent` is implemented as `document.write`, so
  *    inline script in the source would otherwise execute. The sanitiser
@@ -107,7 +122,8 @@ export async function withRenderedPage<T>(
     return await use(page);
   } finally {
     // Closes the context's pages with it, discarding cookies, storage and
-    // cache. The browser itself stays warm for the next render.
+    // cache. The browser stays up for the rest of this request's work;
+    // `withBrowser` is what ends the session.
     await context.close().catch(() => {});
   }
 }

@@ -59,11 +59,21 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   const autoFormat = useAutoFormat(html, css, applyFormatted);
 
   // Re-render on a pause, but only while the toggle is on.
+  //
+  // The document id rides along so the server can refresh the card's preview
+  // on the same browser session it uses for the PDF. It is passed on every
+  // render rather than only when one is known to be due: the server already
+  // holds the state that decides — a preview is captured only for a document
+  // of the caller's own whose stored image the last write cleared — and
+  // duplicating that test here would be a second copy of it to get wrong.
   useEffect(() => {
     if (!autoPreview) return;
-    const timer = setTimeout(() => void render(html, css), AUTO_PREVIEW_DEBOUNCE_MS);
+    const timer = setTimeout(
+      () => void render(html, css, save.documentId),
+      AUTO_PREVIEW_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timer);
-  }, [html, css, render, autoPreview]);
+  }, [html, css, render, autoPreview, save.documentId]);
 
   // Render once on load so the pane isn't empty.
   const didInitialRender = useRef(false);
@@ -83,8 +93,8 @@ export function App({ documentId, documentName, initialContent }: AppProps = {})
   }, [html, css, documentId]);
 
   const renderNow = useCallback(() => {
-    void render(html, css);
-  }, [render, html, css]);
+    void render(html, css, save.documentId);
+  }, [render, html, css, save.documentId]);
 
   // Cmd/Ctrl+Enter re-renders. The only way to render besides the button on
   // the stale overlay, now that the Preview button is gone.

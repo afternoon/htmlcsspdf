@@ -10,7 +10,7 @@ export interface Renderer {
   pdfUrl: string | null;
   error: RenderError | null;
   rendering: boolean;
-  render: (html: string, css: string) => Promise<void>;
+  render: (html: string, css: string, documentId?: string | null) => Promise<void>;
   clearError: () => void;
   setError: (error: RenderError) => void;
   /** True when the editor has moved on from what the preview shows. */
@@ -40,89 +40,97 @@ export function useRenderer(): Renderer {
     null,
   );
 
-  const render = useCallback(async (html: string, css: string) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const seq = ++seqRef.current;
+  const render = useCallback(
+    async (html: string, css: string, documentId?: string | null) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const seq = ++seqRef.current;
 
-    // The attempt gives up early in several places — a superseded render, a
-    // syntax error, a rejected response. Running it as a nested function keeps
-    // those returns local, so the pending flag is cleared on every path below
-    // without a `finally`, which the React Compiler cannot compile.
-    const attempt = async () => {
-      try {
-        // Catch syntax errors locally rather than spending a browser session on
-        // input that cannot parse.
-        const check = await validate(html, css);
-        if (seq !== seqRef.current) return;
-        if (!check.ok) {
-          const extra = check.issues.length - 1;
-          setError({
-            message: describeIssue(check.issues[0]),
-            hint:
-              extra > 0
-                ? `${extra} more issue${extra > 1 ? "s" : ""} to fix.`
-                : "Fix the syntax error to render.",
-          });
-          return;
-        }
-
-        const res = await fetch("/api/render", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ html, css }),
-          signal: controller.signal,
-        });
-        if (seq !== seqRef.current) return;
-
-        if (!res.ok) {
-          let message = `Render failed (${res.status})`;
-          let hint: string | undefined;
-          try {
-            const body = (await res.json()) as { error?: string; hint?: string };
-            if (body.error) message = body.error;
-            hint = body.hint;
-          } catch {
-            // Non-JSON error body; keep the status-based message.
+      // The attempt gives up early in several places — a superseded render, a
+      // syntax error, a rejected response. Running it as a nested function keeps
+      // those returns local, so the pending flag is cleared on every path below
+      // without a `finally`, which the React Compiler cannot compile.
+      const attempt = async () => {
+        try {
+          // Catch syntax errors locally rather than spending a browser session on
+          // input that cannot parse.
+          const check = await validate(html, css);
+          if (seq !== seqRef.current) return;
+          if (!check.ok) {
+            const extra = check.issues.length - 1;
+            setError({
+              message: describeIssue(check.issues[0]),
+              hint:
+                extra > 0
+                  ? `${extra} more issue${extra > 1 ? "s" : ""} to fix.`
+                  : "Fix the syntax error to render.",
+            });
+            return;
           }
-          // Keep the previous PDF visible underneath the overlay.
-          setError({ message, hint });
-          return;
+
+          const res = await fetch("/api/render", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            // The document this content belongs to, when it has one. The
+            // server refreshes its card preview on the same browser session
+            // as the PDF, after the PDF has been sent — so the picture costs
+            // a second render rather than a second session. Ignored unless
+            // the document is the signed-in caller's and is owed one.
+            body: JSON.stringify({ html, css, documentId: documentId ?? undefined }),
+            signal: controller.signal,
+          });
+          if (seq !== seqRef.current) return;
+
+          if (!res.ok) {
+            let message = `Render failed (${res.status})`;
+            let hint: string | undefined;
+            try {
+              const body = (await res.json()) as { error?: string; hint?: string };
+              if (body.error) message = body.error;
+              hint = body.hint;
+            } catch {
+              // Non-JSON error body; keep the status-based message.
+            }
+            // Keep the previous PDF visible underneath the overlay.
+            setError({ message, hint });
+            return;
+          }
+
+          const blob = await res.blob();
+          if (seq !== seqRef.current) return;
+
+          const url = URL.createObjectURL(blob);
+          const previous = pdfUrlRef.current;
+          pdfUrlRef.current = url;
+          setPdfUrl(url);
+          setRenderedFrom({ html, css });
+          setError(null);
+          if (previous) URL.revokeObjectURL(previous);
+        } catch (e) {
+          if (controller.signal.aborted) return;
+          if (seq !== seqRef.current) return;
+          // fetch() rejects with TypeError when the request never reached a
+          // server — offline, DNS failure, connection refused.
+          const unreachable = e instanceof TypeError;
+          setError({
+            message: unreachable
+              ? "Unable to reach the render service."
+              : e instanceof Error
+                ? e.message
+                : "Render failed.",
+            hint: unreachable ? "Check your connection and try again." : undefined,
+          });
         }
+      };
 
-        const blob = await res.blob();
-        if (seq !== seqRef.current) return;
-
-        const url = URL.createObjectURL(blob);
-        const previous = pdfUrlRef.current;
-        pdfUrlRef.current = url;
-        setPdfUrl(url);
-        setRenderedFrom({ html, css });
-        setError(null);
-        if (previous) URL.revokeObjectURL(previous);
-      } catch (e) {
-        if (controller.signal.aborted) return;
-        if (seq !== seqRef.current) return;
-        // fetch() rejects with TypeError when the request never reached a
-        // server — offline, DNS failure, connection refused.
-        const unreachable = e instanceof TypeError;
-        setError({
-          message: unreachable
-            ? "Unable to reach the render service."
-            : e instanceof Error
-              ? e.message
-              : "Render failed.",
-          hint: unreachable ? "Check your connection and try again." : undefined,
-        });
-      }
-    };
-
-    setRendering(true);
-    // `attempt` handles its own failures, so this never rejects.
-    await attempt();
-    if (seq === seqRef.current) setRendering(false);
-  }, []);
+      setRendering(true);
+      // `attempt` handles its own failures, so this never rejects.
+      await attempt();
+      if (seq === seqRef.current) setRendering(false);
+    },
+    [],
+  );
 
   // Release the final blob URL on unmount.
   useEffect(() => {
