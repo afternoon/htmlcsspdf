@@ -1,0 +1,11 @@
+{
+  "name": "htmlcsspdf",
+  "description": "Write HTML and CSS, get a PDF. Create, read and edit documents in an htmlcsspdf account over MCP, with the page-setup and sanitiser rules an agent needs to get a document right first time.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Ben Godfrey"
+  },
+  "homepage": "https://htmlcsspdf.ben2.com/",
+  "repository": "https://github.com/afternoon/htmlcsspdf",
+  "keywords": ["pdf", "html", "css", "documents"]
+}
